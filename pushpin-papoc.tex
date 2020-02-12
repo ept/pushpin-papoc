@@ -1,0 +1,115 @@
+\documentclass[sigplan,10pt]{acmart}
+\usepackage[utf8]{inputenc}
+
+\setcopyright{rightsretained}
+\copyrightyear{2020}
+\acmYear{2020}
+\acmDOI{}
+\acmConference[]{}{}{}
+\acmBooktitle{}
+\acmPrice{}
+\acmISBN{}
+
+\begin{document}
+\title{PushPin at PaPoC (TODO come up with title)}
+
+\author{Peter van Hardenberg}
+\email{pvh@inkandswitch.com}
+\affiliation{%
+  \institution{Ink \& Switch, LLC}
+  \city{San Francisco}
+  \state{CA}
+  \postcode{}
+  \country{USA}
+}
+
+\author{Martin Kleppmann}
+\email{mk428@cl.cam.ac.uk}
+\orcid{0000-0001-7252-6958}
+\affiliation{%
+  \institution{University of Cambridge}
+  \streetaddress{15 JJ Thomson Avenue}
+  \city{Cambridge}
+  \state{}
+  \postcode{CB3 0FD}
+  \country{United Kingdom}
+}
+
+\begin{abstract}
+    TODO
+\end{abstract}
+
+\settopmatter{printfolios=true} % Recommended EuroSys formatting
+\maketitle
+
+\section{Introduction}
+
+\section{Bullet Points}
+
+\begin{itemize}
+    \item programming for deliberately distributed systems introduces new challenges
+    \item how this environment different?
+    \begin{itemize}
+	    \item no single source of truth, no single authority
+	    \item devices get out of sync
+	    \item connectivity is non-boolean
+	    \item changes can come from anywhere at any time
+    \end{itemize}
+    \item project goals
+    \begin{itemize}
+        \item highly polished end-user software to be accessible to users
+        \item written with mainstream languages \& platforms to be accessible to developers
+        \item software for the long now -- no infrastructure to decay
+    \end{itemize}
+    \item how to rationalize all this?
+    \begin{itemize}
+	    \item FRP, for its easily reasoned-about loop: 
+	    \begin{itemize}
+			 \item transform a document functionally into an application view
+			 \item create events in the application that trigger state updates
+			 \item record \& broadcast state updates to peers
+		\end{itemize}
+	    \item many nested \& linked documents, each with their own render function
+	    \begin{itemize}
+		    \item a text note, a chat window, a user profile, a canvas
+		\end{itemize}
+	    \item store all local changes in append-only logs, distribute those logs to other interested peers
+	    \item use cryptographic functions to produce self-validating data
+	\end{itemize}
+    \item what works, what's not working so well?
+    \begin{itemize}
+	    \item FRP render loop works great -- taking a functional transform of a document state to application view means never worrying about where the update came from or how to render it
+	    \item storing \& distributing append-only logs is very simple and robust
+	    \item peer-to-peer networking is highly problematic
+	    \begin{itemize}
+		    \item webrtc (not very good, requires centralized assets)
+		    \item DHTs (reliability, privacy)
+		    \item centralized services (fragility)
+		    \item router configuration issues
+		\end{itemize}
+	    \item much performance work has been done
+	    \begin{itemize}
+		    \item architect to separate render \& computation of CRDT operations
+		\end{itemize}
+	    \item conflict resolution surprisingly unproblematic
+	    \item merge \& collaboration UX is largely unexplored (could show a pixelpusher slide \& briefly explain problems)
+	    \item what kind of identity, privacy, sharing features are important / feasible here?
+	    \item html is a pretty rough application development platform
+	    \item no real mobile support
+	    \begin{itemize}
+	        \item what's the cross-platform story?
+	    \end{itemize}
+    \end{itemize}
+    \item conclusions
+    \begin{itemize}
+	    \item frp + crdt = pretty good
+	\end{itemize}
+\end{itemize}
+
+\begin{acks}
+Martin Kleppmann is supported by a Leverhulme Trust Early Career Fellowship and by the Isaac Newton Trust.
+\end{acks}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}{}
+\end{document}
