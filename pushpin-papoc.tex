@@ -11,7 +11,7 @@
 \acmISBN{}
 
 \begin{document}
-\title{PushPin at PaPoC (TODO come up with title)}
+\title{PushPin: Towards Production-Quality \\Peer-to-peer Collaboration}
 
 \author{Peter van Hardenberg}
 \email{pvh@inkandswitch.com}
@@ -36,7 +36,10 @@
 }
 
 \begin{abstract}
-    TODO
+Fully peer-to-peer application software promises many benefits over cloud software, in particular, being able to function indefinitely without requiring servers.
+Research on distributed consistency mechanisms such as CRDTs has laid the foundation for P2P data synchronisation and collaboration.
+In this paper we report on our experience in taking these technologies beyond research prototypes, and working towards commercial-grade P2P collaboration software.
+We identify approaches that work well in our experience, such as the functional reactive programming paradigm, and highlight areas in need of further research, such as the reliability of NAT traversal and usability challenges.
 \end{abstract}
 
 \settopmatter{printfolios=true} % Recommended EuroSys formatting
@@ -44,11 +47,39 @@
 
 \section{Introduction}
 
-The prize for delivering a truly peer-to-peer application development system is great. Present-day centralised cloud systems rely on expensive 24/7 operations teams to maintain them, generally do not function without access to the internet, and cease to exist when the organisation backing them terminates their funding. Ensuring that software works in every environment and can function indefinitely would be a boon to users everywhere. That said, centralised cloud-based software has created the expectation of universal access to both canonical versions of software and to users' data from any internet-connected computer at any moment, with full collaborative functionality built in.
+In the past, software used to run on one computer and store its data on the local disk.
+Now, increasingly, we expect our software and data to be available on multiple devices, enabling both synchronisation across devices belonging to the same user (e.g.\ laptop, smartphone, tablet), and allowing real-time collaboration between multiple users.
 
-The first step to replacing these centralised systems is to return control over users' data and software to their own computers. To this end, we must reconsider our relationship with vast centralised databases and explore new methodologies for building software.
+The standard way of implementing such multi-user, multi-device software today is to rely on cloud services that store the primary copy of the users' data, and which can be accessed through thin clients such as web browsers and mobile apps.
+However, reliance on the cloud comes with problems: services require ongoing maintenance by expensive 24/7 operations teams, and they cease to exist when the organisation backing them terminates their funding.
+If a cloud service shuts down, users lose access to all data stored in that service, unless some migration path to an alternative service is provided.
+Moreover, cloud-centric software often does not work well offline, and can be slow as the client waits for round-trips to the server in order to load or store data there.
 
-The PushPin project is one such exploration. It attempts to build on recent work developing document CRDTs by further integrating a peer-to-peer data distribution system, functional reactive programming, and browser rendering with a new programming model. We will describe our experiment in "document oriented programming", its successes, and limitations.
+Peer-to-peer application software promises to overcome these problems.
+In principle, a P2P system should be able to function indefinitely, without depending on someone paying the server bills to keep a cloud service running.
+Storing the primary copy of data on the users' devices enables offline work and stronger data ownership~\cite{LocalFirst}, and synchronising updates through a P2P network should allow the same kind of collaboration that we know from cloud software.
+
+While various research prototypes of P2P collaboration software have been developed, we are yet to see any mainstream applications using this approach.
+The PushPin project is investigating if and how we can develop commercial-quality collaboration software without relying on servers.
+Our goal is not to create new algorithms or protocols, but rather to evaluate existing technologies by developing an example P2P application with a mindset of industrial software development best practices.
+We approach this project with broad interests in exploring programming models, P2P data distribution, reliability, and usability.
+
+In summary, our findings are:
+\begin{itemize}
+    \item TODO fill in these bullet points with some punchy statements when we've written the rest of the article
+    \item \dots
+\end{itemize}
+
+% The prize for delivering a truly peer-to-peer application development system is great.
+% centralised cloud-based software has created the expectation of universal access to both canonical versions of software and to users' data from any internet-connected computer at any moment, with full collaborative functionality built in.
+
+%To this end, we must reconsider our relationship with vast centralised databases and explore new methodologies for building software.
+
+% document CRDTs
+% functional reactive programming
+% browser rendering
+% "document oriented programming"
+
 
 \section{Bullet Points}
 
