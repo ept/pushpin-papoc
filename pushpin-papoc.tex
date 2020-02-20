@@ -113,6 +113,45 @@ In summary, our findings are:
 % browser rendering
 % "document oriented programming"
 
+\section{Design Principles}
+
+Before going into the details of the implementation of PushPin we outline the principles we applied to its design and development.
+
+\subsection{Local-first software}
+
+While we want users' data to be accessible on multiple devices, the primary copies of this data should reside on the users' local computers, not in the cloud.
+If servers are used, these replicas should be considered secondary copies that exist only to facilitate data synchronisation and backup, but they should not be considered authoritative.
+In previous work we have coined the term \emph{local-first software} to describe software that adheres to this principle~\cite{LocalFirst}.
+
+With a local-first approach, the software continues working fully if the user's computer is disconnected from the Internet: cross-device synchronisation happens in the background when a network connection is available.
+Even if all servers are shut down, the copy of the data on the local disk remains fully functional and under the user's control.
+The user can manage this data like any other local files, e.g.\ copying it, backing it up, or converting it into another format.
+
+\subsection{Minimal dependence on servers}
+
+We want the software to continue working indefinitely, without incurring ongoing costs for operating servers.
+Thus, in addition to local data storage on each device, the cross-device data synchronisation mechanism should also depend on servers to the least degree possible.
+
+In some environments it is possible to operate entirely without servers: for example, when devices are co-located on the same LAN, they can discover each other using mDNS and exchange updates directly over the LAN, without ever going via the Internet.
+In general, peer-to-peer networking protocols allow direct device-to-device communication over the Internet, even when those devices are behind firewalls or have no publicly routable IP address (because they are behind NAT).
+However, as discussed in Section TODO, these protocols often require a small amount of centralised server infrastructure for bootstrapping.
+
+\subsection{Conflict-free data synchronisation}
+
+The combination of using local on-device storage, support for offline editing, and synchronisation without servers implies that our application is \emph{intrinsically distributed}.
+Each device serves as a replica, and it would not make sense to enforce any kind of single system image semantics across replicas, since that would imply that a device must wait for synchronous coordination with other devices.
+We cannot rely on consensus algorithms, which must wait for communication with a quorum of replicas.
+
+Rather, we have to accept that each device has its own local view onto the shared data, and that those views may diverge as users update their data.
+As devices exchange updates, they converge again by merging their states.
+We do this using conflict-free replicated data types (CRDTs)~\cite{Shapiro:2011un}.
+
+\subsection{Mainstream, as far as possible}
+
+In order to explore the \emph{user experience} implications of a peer-to-peer architecture, we wanted to develop not just a rough research prototype, but polished end-user software that is on par with commercial applications available today, with a thoughtful graphical and interaction design.
+We also wanted to explore the \emph{developer experience} of peer-to-peer software, exploring how accessible this architecture could be to mainstream software engineers.
+Thus, we wanted to base our work on mainstream languages and platforms as far as possible.
+
 \begin{figure*}
     \centering
     \includegraphics[width=0.7\textwidth]{pushpin.jpg}
@@ -122,44 +161,31 @@ In summary, our findings are:
 
 \section{PushPin: A Collaborative Corkboard}
 
-The PushPin software~\cite{PushPinSource}, shown in Figure~\ref{fig:pushpin}, allows users to collect media of various types (including text, web pages, images, and PDF files) and organise it.
+The PushPin software~\cite{PushPinSource}, shown in Figure~\ref{fig:pushpin}, allows users to collect media of various types (including text, web pages, images, and PDF files), to archive and organise it.
 Media files are visually represented as \emph{cards} on an infinite 2D \emph{board}, where they can be resized and positioned arbitrarily.
 One board may be nested within another board, enabling hierarchical organisation and navigation.
 This board metaphor is known from other note-taking software such as Miro~\cite{Miro} and Milanote~\cite{Milanote}.
 
-In order to explore the \emph{user experience} implications of a peer-to-peer architecture, PushPin is designed to be polished end-user software on par with commercial applications available today.
-We also wanted to explore the \emph{developer experience} of peer-to-peer software, exploring how accessible this architecture could be to mainstream developers.
-Thus, we wanted to base our work on mainstream languages and platforms as far as possible.
-
 In recent years there has been considerable innovation in technologies for creating web applications, including in web browsers (new features of HTML and CSS), languages (e.g.\ TypeScript), user interface libraries (especially React~\cite{React}), and JavaScript modules for a wide variety of tasks (e.g.\ PDF rendering~\cite{PDFjs}).
 In order to take advantage of this lively ecosystem, we decided to implement PushPin using web technologies.
 
-However, conventional web applications have constraints that make them unsuitable for peer-to-peer use.
-The greatest constraints are:
-\begin{itemize}
-    \item Many P2P protocols require sending and receiving arbitrary UDP packets.
-    However, web browsers restrict network communication for security reasons, in particular through the \emph{same-origin policy}~\cite{SameOrigin}, making it impossible to implement such protocols in JavaScript alone.
-    (An exception is WebRTC, a P2P protocol that is built into web browsers.)
-    \item Although web apps can write data to disk using APIs such as localStorage and IndexedDB, this data tends not to be very durable.
-    For example, it is implicitly deleted when a user chooses to clear cookies in their browser~\cite{LocalStorageCleared}.
-\end{itemize}
+However, web applications running in a browser tab have constraints that make them unsuitable for peer-to-peer use.
+In particular, although web apps can write data to disk using APIs such as localStorage and IndexedDB, this data tends not to be very durable: it is silently deleted when a user chooses to clear cookies in their browser~\cite{LocalStorageCleared}.
+(Maybe the clue is in the name: they are called ``browsers'', not ``keepers''.)
+
+We avoid these limitations by building on Electron (TODO reference), which takes a JavaScript web app, runs it in a Chromium-based browser window, and allows the result to be packaged as a downloadable and locally installable executable.
+Electron makes the full set of Node.js APIs available to application code, including full access to the local filesystem, and socket APIs allowing full TCP and UDP networking.
+Electron apps are portable across Windows, Linux, and macOS.
+
+
+\subsection{Network technologies}
+
+% Many P2P protocols require sending and receiving arbitrary UDP packets.
+% However, web browsers restrict network communication for security reasons, in particular through the \emph{same-origin policy}~\cite{SameOrigin}, making it impossible to implement such protocols in JavaScript alone.
+% An exception is WebRTC, a P2P protocol that is built into web browsers.
 
 % Designed to collect all the information you need and synchronize it across all your computers. PushPin supports taking notes, and can archive web content, images, PDFs, audio, video, and any other files you might want to hang out. It can synchronize across all your devices, and doesn't require any infrastructure to operate.
 
-\begin{itemize}
-    \item Desktop software (why not browser/web-based)
-    Web browser applications are not built around durable preservation of data. They are 'browsers' not 'keepers'.
-    \item Browser technology (why browser/web-based)
-    The browser rendering stack is the only truly cross-platform development environment.
-    \item Conclusion: Electron
-    The Electron application development environment lets us use commonly-deployed browser technologies (HTML, CSS, Typescript) and access the broad ecosystem of Javascript modules (React, PDF.js, \&c) while still preserving traditional application-like user experiences, such as being visibly installed, storing data permanently to disk.
-    \item User-experience goals
-    \begin{itemize}
-        \item highly polished end-user software to be accessible to users
-        \item written with mainstream languages \& platforms to be accessible to mainstream developers
-        \item software for the long now -- no infrastructure to decay
-    \end{itemize}
-\end{itemize}
 
 \subsection{Document-oriented Programming}
 \begin{itemize}
@@ -171,15 +197,6 @@ The greatest constraints are:
 \section{Bullet Points}
 
 Before describing our solution, let us first outline the challenges of a decentralised application system.
-
-programming for deliberately distributed systems introduces new challenges
-\begin{itemize}
-    \item users data should reside canonically in their computers
-    \item software need not "go offline" or go on an "incredible journey"
-    \item being distributed is inherent in having multiple devices (not incidental in need for scalability)
-    \item (where to put) most distributed systems literature is about making many computers behave provably identically to a single computer but with more performance or resilience. this problem domain is intrinsically distributed and will never have the properties of a single computer.
-\end{itemize}
-Ergo, to achieve our aims, we must build a distributed system.
 
 \section{Challenges of Developing an Intrinsically Distributed System}
 
@@ -218,7 +235,7 @@ In the simplest case, we tie the program state to an operational CRDT (automerge
 \begin{figure}
     \centering
     % diagram depicting FRP + CRDTs here
-    \includegraphics{}
+    %\includegraphics{}
     \caption{Caption}
     \label{fig:my_label}
 \end{figure}
