@@ -113,7 +113,7 @@ In summary, our findings are:
 % browser rendering
 % "document oriented programming"
 
-\section{Design Principles}
+\section{Design Principles}\label{sec:principles}
 
 Before going into the details of the implementation of PushPin we outline the principles we applied to its design and development.
 
@@ -149,7 +149,7 @@ We do this using conflict-free replicated data types (CRDTs)~\cite{Shapiro:2011u
 \subsection{Mainstream, as far as possible}
 
 In order to explore the \emph{user experience} implications of a peer-to-peer architecture, we wanted to develop not just a rough research prototype, but polished end-user software that is on par with commercial applications available today, with a thoughtful graphical and interaction design.
-We also wanted to explore the \emph{developer experience} of peer-to-peer software, exploring how accessible this architecture could be to mainstream software engineers.
+We also wanted to explore the \emph{developer experience} of peer-to-peer software, to understand how this architecture could become accessible to mainstream software engineers.
 Thus, we wanted to base our work on mainstream languages and platforms as far as possible.
 
 \begin{figure*}
@@ -159,73 +159,52 @@ Thus, we wanted to base our work on mainstream languages and platforms as far as
     \label{fig:pushpin}
 \end{figure*}
 
-\section{PushPin: A Collaborative Corkboard}
+\section{PushPin: A Collaborative Corkboard}\label{sec:pushpin}
 
 The PushPin software~\cite{PushPinSource}, shown in Figure~\ref{fig:pushpin}, allows users to collect media of various types (including text, web pages, images, and PDF files), to archive and organise it.
-Media files are visually represented as \emph{cards} on an infinite 2D \emph{board}, where they can be resized and positioned arbitrarily.
+Media files are visually represented as \emph{cards} on an infinite two-dimensional \emph{board}, where they can be resized and positioned arbitrarily.
 One board may be nested within another board, enabling hierarchical organisation and navigation.
 This board metaphor is known from other note-taking software such as Miro~\cite{Miro} and Milanote~\cite{Milanote}.
 
-In recent years there has been considerable innovation in technologies for creating web applications, including in web browsers (new features of HTML and CSS), languages (e.g.\ TypeScript), user interface libraries (especially React~\cite{React}), and JavaScript modules for a wide variety of tasks (e.g.\ PDF rendering~\cite{PDFjs}).
+We have built PushPin upon the principles articulated in Section~\ref{sec:principles}.
+In this section we go into the details of our technology choices implementing PushPin, and we report on lessons we learnt in Section~\ref{sec:lessons}.
+
+\subsection{Building desktop software with Electron}
+
+In recent years there has been considerable innovation in web application technologies, including in web browsers (new features of HTML and CSS), languages (e.g.\ TypeScript), user interface libraries (especially React~\cite{React}), and JavaScript modules for a wide variety of tasks (e.g.\ PDF rendering~\cite{PDFjs}).
 In order to take advantage of this lively ecosystem, we decided to implement PushPin using web technologies.
 
-However, web applications running in a browser tab have constraints that make them unsuitable for peer-to-peer use.
+However, web applications running in a browser tab have constraints that make them unsuitable for local-first/P2P use.
 In particular, although web apps can write data to disk using APIs such as localStorage and IndexedDB, this data tends not to be very durable: it is silently deleted when a user chooses to clear cookies in their browser~\cite{LocalStorageCleared}.
 (Maybe the clue is in the name: they are called ``browsers'', not ``keepers''.)
 
-We avoid these limitations by building on Electron (TODO reference), which takes a JavaScript web app, runs it in a Chromium-based browser window, and allows the result to be packaged as a downloadable and locally installable executable.
-Electron makes the full set of Node.js APIs available to application code, including full access to the local filesystem, and socket APIs allowing full TCP and UDP networking.
+We avoid these limitations by building on Electron~\cite{Electron}, which takes a JavaScript web app, runs it in a Chromium-based browser window, and allows the result to be packaged as a downloadable and locally installed executable.
+Electron makes Node.js APIs available to application code, including full access to the local filesystem, and socket APIs allowing arbitrary TCP and UDP networking.
+(In contrast, in a browser tab, network communication is constrained for security reasons by the same-origin policy~\cite{SameOrigin}.)
 Electron apps are portable across Windows, Linux, and macOS.
 
+\subsection{Persistent State and Ephemeral State}
 
-\subsection{Network technologies}
+Every user interaction results in a state change within the application.
+Broadly speaking, there are two types of state:
+\begin{description}
+\item[Persistent state] is saved to disk and replicated to other devices.
+For example, the contents of every board and every card are represented as a JSON \emph{document}.
+We use the Automerge CRDT library~\cite{Automerge,Automerge:2018} to represent all persistent documents, to replicate them, and to automatically merge any updates made concurrently on different devices.
+\item[Ephemeral state] exists only in-memory in the locally running application, and is not replicated.
+Ephemeral state includes the currently viewed board (TODO is this true?), the scroll position within a board view, or the unsaved draft contents of text boxes.
+\end{description}
 
-% Many P2P protocols require sending and receiving arbitrary UDP packets.
-% However, web browsers restrict network communication for security reasons, in particular through the \emph{same-origin policy}~\cite{SameOrigin}, making it impossible to implement such protocols in JavaScript alone.
-% An exception is WebRTC, a P2P protocol that is built into web browsers.
+% TODO include an example JSON representation of a card?
 
-% Designed to collect all the information you need and synchronize it across all your computers. PushPin supports taking notes, and can archive web content, images, PDFs, audio, video, and any other files you might want to hang out. It can synchronize across all your devices, and doesn't require any infrastructure to operate.
+% introduce URLs explicitly, explain how one document references another
+
+Our earliest prototypes assumed users would have only a single "document" open at a time, and that these documents would be shared by their URLs. We also made no allowances for non-shared state. This model was very limiting, and over time we found we needed a number of additional concepts.
+
+We added a messaging system to allow users to broadcast parts of this local state to their peers. We use this to communicate data which is valuable only in the moment and not worthy of recording, such as another users' current selection, or cursor position in a text field.
 
 
-\subsection{Document-oriented Programming}
-\begin{itemize}
-    \item crdts
-    \item frp
-    \item peer-to-peer data distribution
-\end{itemize}
-
-\section{Bullet Points}
-
-Before describing our solution, let us first outline the challenges of a decentralised application system.
-
-\section{Challenges of Developing an Intrinsically Distributed System}
-
-If we embrace both the notion that access to data from any computer is essential, and that mandatory centralised infrastructure is antithetical to the goal of permanently available software then it becomes inevitable that we must build a peer-to-peer data distribution system. 
-
-Peer-to-peer systems have a number of unique challenges versus centralised systems, including:
-
-\begin{itemize}
-	\item no single source of truth, no single authority
-
-	Without a centralised server hosting an authoritative copy, every copy of the data becomes, in some sense, authoritative. This implies that we must have some kind of robust merging strategy at the core of our design.
-	\item devices get out of sync
-
-    Because we insist that each device is always able to make progress without communication with other nodes, it is vitally important to both do our best to synchronise our various devices, but also to communicate synchronisation state. What were the last changes received from our laptop? Did the changes we made locally get uploaded to a server before the network connection was lost?  
-
-    \item connectivity is non-boolean
-
-    With a centralised system a user is either offline or online. The central node routes all data. With a peer-to-peer system is is entirely possible that you might be connected with another user around the world but due to the complexities of computer networking, disconnected from a user in the same room. (Perhaps their wifi connection is offline.) 
-
-    \item changes can come from anywhere at any time
-
-    Without the centralised system approving or rejecting changes against a monotonically incrementing API version, it's possible that other clients are running older, newer, or just different versions of the program. How do we robustly manage change over time?
-\end{itemize}
-
-\section{How to actually build within these constraints}
-
-At first glance, these challenges may appear insurmountable. We want to store all the data a user is exposed to permanently on all their devices, to allow differing versions of the software to inter-operate, to enable collaboration between users in every possible combination of devices and network topologies, and most challenging of all, we want to do all of this in a way that makes it easy for anyone with industry-standard web development skills to successfully produce software!
-
-In fact, we have made significant progress towards this end by productively combining a number of recent developments in software methodology in a form we have not yet seen elsewhere. We call this approach "document oriented programming".
+% In fact, we have made significant progress towards this end by productively combining a number of recent developments in software methodology in a form we have not yet seen elsewhere. We call this approach "document oriented programming".
 
 \subsection{Functional Reactive Programming}
 The first motivating insight is that functional reactive programming is a helpful abstraction. Functional reactive programming works by creating a single, functional loop where a program state is deterministically transformed into a user interface, and where all interactions emitting from the user interface pass through a single function (known as a reducer) which produce the next state.
@@ -247,14 +226,6 @@ Distribution of local changes is managed via a peer-to-peer system akin to the D
 Actually establishing peer-to-peer connections is challenging in real-world computer systems. Chief among problems is the tendency for user computers to be situated behind NAT firewalls. A variety of peer-discovery and NAT traversal methods are common-place in peer-to-peer systems, but we cannot take advantage of industry standards like uPNP (as the BitTorrent software often does) because we want our software to work successfully in environments where the user does not control network infrastructure like at cafe's, in libraries, and on institutional networks.
 
 % I feel like there is a lot more to say about document URLs and sharing here.
-
-\subsection{Local State and Ephemeral State}
-
-Our earliest prototypes assumed users would have only a single "document" open at a time, and that these documents would be shared by their URLs. We also made no allowances for non-shared state. This model was very limiting, and over time we found we needed a number of additional concepts.
-
-First, and quite simply, by explicitly separating application state into a local-only and shared-document we enabled our application developers to keep track of local-only state like drafts of messages in text-boxes.
-
-Next, we added a messaging system to allow users to broadcast parts of this local state to their peers. We use this to communicate data which is valuable only in the moment and not worthy of recording, such as another users' current selection, or cursor position in a text field.
 
 \subsection{Composite Views}
 
@@ -281,6 +252,48 @@ For example, we can define a "container" which renders a list of documents store
 	    \item use cryptographic functions to produce self-validating data
 	\end{itemize}
 \end{comment}
+
+
+\subsection{Network technologies}
+
+% Many P2P protocols require sending and receiving arbitrary UDP packets.
+% However, web browsers restrict network communication for security reasons, in particular through the \emph{same-origin policy}~\cite{SameOrigin}, making it impossible to implement such protocols in JavaScript alone.
+% An exception is WebRTC, a P2P protocol that is built into web browsers.
+
+% Designed to collect all the information you need and synchronize it across all your computers. PushPin supports taking notes, and can archive web content, images, PDFs, audio, video, and any other files you might want to hang out. It can synchronize across all your devices, and doesn't require any infrastructure to operate.
+
+
+\subsection{Document-oriented Programming}
+\begin{itemize}
+    \item crdts
+    \item frp
+    \item peer-to-peer data distribution
+\end{itemize}
+
+\section{Lessons from Implementing PushPin}\label{sec:lessons}
+
+%Challenges of Developing an Intrinsically Distributed System
+
+Peer-to-peer systems have a number of unique challenges versus centralised systems, including:
+
+\begin{itemize}
+	\item no single source of truth, no single authority
+
+	Without a centralised server hosting an authoritative copy, every copy of the data becomes, in some sense, authoritative. This implies that we must have some kind of robust merging strategy at the core of our design.
+	\item devices get out of sync
+
+    Because we insist that each device is always able to make progress without communication with other nodes, it is vitally important to both do our best to synchronise our various devices, but also to communicate synchronisation state. What were the last changes received from our laptop? Did the changes we made locally get uploaded to a server before the network connection was lost?  
+
+    \item connectivity is non-boolean
+
+    With a centralised system a user is either offline or online. The central node routes all data. With a peer-to-peer system is is entirely possible that you might be connected with another user around the world but due to the complexities of computer networking, disconnected from a user in the same room. (Perhaps their wifi connection is offline.) 
+
+    \item changes can come from anywhere at any time
+
+    Without the centralised system approving or rejecting changes against a monotonically incrementing API version, it's possible that other clients are running older, newer, or just different versions of the program. How do we robustly manage change over time?
+    
+    \item different devices might be running different versions of the software, and they need to interoperate cleanly
+\end{itemize}
 
 
 what works, what's not working so well?
