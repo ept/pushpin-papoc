@@ -193,11 +193,15 @@ For example, the contents of every board and every card are represented as a JSO
 We use the Automerge CRDT library~\cite{Automerge,Automerge:2018} to represent all persistent documents, to replicate them, and to automatically merge any updates made concurrently on different devices.
 \item[Ephemeral state] exists only in-memory in the locally running application, and is not replicated.
 Ephemeral state includes the currently viewed board (TODO is this true?), the scroll position within a board view, or the unsaved draft contents of text boxes.
+
+% TODO: more uses for ephemeral & shared state 
 \end{description}
 
 % TODO include an example JSON representation of a card?
 
 % introduce URLs explicitly, explain how one document references another
+
+% On URLs: These stable names are important for collaboration, because users often want to be able to share documents over time, as in the case of an essay as it is being written, or a PushPin board as cards are added to it, and to be able to link that content.
 
 Our earliest prototypes assumed users would have only a single "document" open at a time, and that these documents would be shared by their URLs. We also made no allowances for non-shared state. This model was very limiting, and over time we found we needed a number of additional concepts.
 
@@ -282,7 +286,7 @@ It provides a distributed hash table (DHT) for peer discovery, and uses the uTP 
 However, it is designed for static files, and is not suitable for data that is constantly changing, like in collaboration software.
 \item[IPFS] aims to provide decentralised storage through a networking stack called \emph{libp2p}.
 Like BitTorrent, it is mostly focused on replicating static files; it provides limited support for changing data through its IPNS and PubSub modules, but these features are immature at the time of writing.
-\item[Dat] is a peer-to-peer data sharing platform.
+\item[Dat] \cite{HowDatWorks,Ogden:2018ur} is a peer-to-peer data sharing platform.
 For peer discovery it uses a centralised DNS service hosted by a nonprofit foundation (a distributed hash table is under development), and it uses BitTorrent's uTP protocol to establish connections.
 \end{description}
 
@@ -304,69 +308,82 @@ This mode of discovery is appealing since it depends only on the local network: 
 
 When peers are not on the same LAN, the Dat protocol uses a centralised DNS server for peer discovery.
 This approach is not fully peer-to-peer, but at present this seems to be a necessary compromise to make.
+Since the DNS server only provides peer discovery, and does not handle any data transfer traffic, it is quite cheap to run.
 
 \subsection{NAT Traversal}\label{sec:nat-traversal}
-
-% citations needed
 
 Due to a shortage of IPv4 addresses, most personal computing devices do not have a globally reachable IP address, but rather a local address in a reserved space (e.g.\ 192.168.x.x or 10.x.x.x).
 When such a device wishes to establish a connection to another, the local router records the destination of outbound traffic and routes responses back to the originating local client.
 This process is called Network Address Translation (NAT).
 
-A device behind NAT can only make outbound connections, but it cannot receive inbound TCP connections.
-An exception: in home environments, where the user has control over their own router, the UPnP standard allows clients to reserve particular ports on the router as the destination for inbound connections.
-However, mobile devices often use networks on which UPnP is not available, such as a coffee shop WiFi, a corporate office network, or a cellular data network.
+A device behind NAT can make outbound connections, but it cannot receive inbound TCP connections from outside of the NAT.
+An exception: in home environments, where the user has control over their own router, the UPnP standard allows devices to reserve particular ports on the router's public IP address as the destination for inbound connections.
+However, mobile devices often use networks with NAT on which UPnP is not available, such as a coffee shop WiFi, a corporate office network, or a cellular data network.
 
-In these cases, the most viable solution is known as ``hole punching'' or NAT traversal \cite{NatTraversal}.
+In these cases, the most viable solution is known as ``hole punching'' or NAT traversal \cite{RFC5389}.
 This process requires the temporary intervention of a third host to introduce the two peers, and both peers sending UDP packets to each other, allowing a connection to be established.
-NAT traversal is performed by BitTorrent's uTP protocol, and by the STUN protocol in WebRTC.
+NAT traversal is performed by BitTorrent's uTP protocol, and by the STUN protocol in WebRTC \cite{RFC5389}.
 
 However, there are situations in which neither the LAN discovery approach nor NAT traversal works.
-For example, some coffee-shop WiFi and some corporate networks are set up in a ``guest network'' mode, which prevents all local connections between devices on the network (intended as a security measure to prevent inadvertent sharing of data on the network).
+For example, some coffee-shop WiFi and some corporate networks are set up in a ``guest network'' mode, which prevents all local connections between devices on the network (intended as a security measure to prevent inadvertent sharing of data with other users on a public network).
 Without local traffic, we attempt to fall back on NAT traversal; however, this approach also fails, since many routers in their default configuration refuse to create NAT traversing routes that originate and terminate within the same network.
 
-In this case, establishing a direct connection between the peers seems to be impossible, and the only remaining option is to use a TURN server to proxy the communications between the peers.
+In this case, establishing a direct connection between the peers seems to be impossible, and the only remaining option is to use a server to proxy the communication between the peers, e.g.\ using the TURN protocol~\cite{RFC5766}.
 In the case of PushPin, users can either run their own publicly addressable network hosts or take advantage of a TURN server provided by the community.
 
-\subsection{Cloud Peers}
+\subsection{Storage Peers}
 
-\todo[inline]{Martin is working from here onwards}
+A limitation of any peer-to-peer system is that two peers can only communicate while they are both online.
+However, mobile devices are often offline, making it difficult to find an opportunity to synchronise.
+For example, if your colleague has shared the URL of a PushPin board with you, it would be annoying if you could not access that board because the only copy of the board resides on your colleague's laptop, and that laptop's lid is currently closed.
 
-These ``cloud peers'' can perform not only the valuable service of providing indirect connections but given some storage space can also provide persistent network availability for data which would otherwise fall offline with the closing of every laptop lid.   
+We can overcome this limitation by introducing \emph{storage peers}, which replicate all the data belonging to a particular user or set of users.
+A storage peer runs the same replication protocol as any other peer; the difference is only that it is always online, allowing other devices to sync with the storage peer at any time.
+Storage peers also provide a form of backup.
 
-\subsection{Trust, but Verify}
+Unlike a traditional server, a storage peer can be reached through NAT traversal, so it does not need a public IP address: for example, it could be a device on the user's home internet connection.
+Since it only stores the data for a small number of users, it does not need to be a powerful machine.
+We have experimented with using a Raspberry Pi as storage peer, writing data to an SD card.
 
-Earlier we noted that traditional client-server protocols operate by providing cryptographic signatures proving posession of host authenticity. In an environment consisting of transient hosts we choose not to authenticate hosts but rather data itself. 
+\subsection{Data Confidentiality and Integrity}
 
-The most common approach to self-validating data is content addressable hashing, and used by BitTorrent. With content addressable hashing, the data is not requested by an arbitrary name or URL, but rather by a hash of its contents. (In fact, BitTorrent uses Merkle trees \cite{MerkleTrees} to allow efficient incremental validation of data during its download.) Short of compromising the hash function used to describe the data, it is impossible to spoof its contents. Unfortunately, changing even a single byte of data causes the hash to change. This makes content hashing unsuitable for real-time collaboration, as it is difficult to name a document that evolves over time.
+Some peer-to-peer systems, such as BitTorrent and IPFS, use a content-addressable storage approach to data integrity: every file is identified by the hash of its contents, and the recipient can check the integrity of the file by comparing its actual hash to the expected hash.
+(In fact, BitTorrent uses Merkle trees \cite{Merkle:1987} to allow efficient incremental validation of data during its download.)
+However, this approach is not suitable for collaboration software, where the the hash would frequently change as data is modified.
+Instead, Dat relies on digital signatures to ensure that nobody can make undetected alterations to the data without knowing the private key.
 
-\subsection{Stable Names}
+The Dat protocol encrypts the communication between peers, using the URL of the document as a shared secret to establish the encryption key~\cite{HowDatWorks}.
+Thus, the URL acts as a bearer token (or capability) that grants read access to the document to anyone who knows it.
+We are interested in stronger access control and end-to-end encryption protocols for collaboration software~\cite{Kleppmann:2018tk}, but we have left this issue out of scope in the PushPin project.
 
-Instead of naming a document by its contents, PushPin adopts a technique inherited again from the Dat Project \cite{DatProject} which is to create an log of messages, each signed (as with an SSL certificate) by an unpublished private key, but addressable by its public key. Because each new message includes both a signature from the private key and the signature of the preceding message, it is trivial to ensure integrity of the chain of messages, and messages can be downloaded from anyone.
+The peer discovery protocol uses hashes of URLs, not the URLs themselves, so that anyone observing the peer discovery traffic (such as the DNS server, or other devices on the local network when using mDNS) does not gain the ability to read the document.
 
-These stable names are important for collaboration, because users often want to be able to share documents over time, as in the case of an essay as it is being written, or a PushPin board as cards are added to it, and to be able to link that content. If the names for content were unable to evolve, a single change to a document would require every document that referred to it to be republished with a new URL, which would require those documents' linkers to be republished and so on, ad infinitum. 
+\subsection{Scalability of Peer Discovery}
 
-\subsection{Discovery in the Dark Forest}
+% (It should be noted that in practice today, the BitTorrent DHT has proven itself operationally resilient but other implementations such as IPFS have struggled to remain useful during flooding attacks.)
 
-We have, thus far, mostly ignored the subject of how one can identify which hosts possess the data a client wishes to request. We have established that with PushPin, as with many other peer-to-peer systems, documents provide their own validation tied to their specially chosen names. These names then, are in security terms a capability, which enable anyone who holds that key to access the contents of the document. Given the importance of these keys, how can we discover which other clients hold the keys without revealing them?
-
-As noted above, the first step is to discuss not the key itself, but a cryptographic hash of the key. By hashing the key in a well-defined manner, any clients who know the underlying secret can agree on a public value to discuss. Without the ability to reverse the hashing function an observer might observe that clients are discussing a topic but cannot infer the key passively. (Once clients connect, both peers must provide a new, second cryptographic proof that they hold the underlying secret in order to outfox an attacker hoping to spoof their way in.)
-
-Once we have this new, safe-to-discuss key, we can advertise it. On a local network, we can broadcast it over mDNS as describe above. Over the internet, we can use signalling servers as with WebRTC, or else we can post the keys into distributed hash tables as with BitTorrent where other peers can discover us and establish connections. (It should be noted that in practice today, the BitTorrent DHT has proven itself operationally resilient but other implementations such as IPFS have struggled to remain useful during flooding attacks.)
-
-The simple, naive solution then, would be to broadcast all the hashes of every piece of data each client holds, and every hash it requests. This approach, used by the Dat Project \cite{DatProject} is suitable when the number of keys is small, but breaks down rapidly as collections expand. As we will see later, PushPin generates many hundreds or thousands of keys in its operation, and in our testing we found we fairly reliably crash the consumer WiFi routers found in short-term rentals with even as few as a half-dozen researchers sharing their collections.
+On a local network, a Dat peer broadcasts all the hashes of URLs for data it holds, and all the hashes it requests.
+This approach is suitable when the number of URLs is small, but it breaks down as collections expand.
+Since PushPin uses a separate URL for each card, a user quickly accumulates many hundreds or thousands of document URLs.
+In our testing we found that we could fairly reliably crash the consumer-grade WiFi routers found in short-term rentals with half a dozen researchers sharing their collections.
 
 % TODO: diagram of append-only logs, discovery keys, maybe broadcasting?
 
-The Secure Scuttlebutt~\cite{Tarr:2019ba} project avoids this problem by placing all of a user's activity into a single log, which it then merges with all of that user's peers and their peers out for several degrees of social connection. This trades one problem for another! By merging all of a user's data (and their peers' data) into one feed, there is no way to selectively synchronise that user. A peer either downloads all, or none. 
+The Secure Scuttlebutt~\cite{Tarr:2019ba} project avoids this problem by placing all of a user's activity into a single log, which it then merges with all of that user's peers and their peers out for several degrees of social connection. This trades one problem for another: by merging all of a user's data (and their peers' data) into one feed, there is no way to selectively synchronise that user. A peer either downloads all, or none.
 
-Fortunately, we have observed that collaborators tend to collaborate on a variety of documents. The most likely place to discover a new document of interest is within the corpus of a peer you have already connected to. We can radically reduce the amount of discovery network traffic by doing normal queries not against a full, global DHT but against the repositories of peers we have already been introduced to. Perhaps these peers could also forward queries on our behalf, recreating a DHT-like network. This is an area for future work.
+Fortunately, we have observed that users tend to collaborate on more than one document with the same collaborator.
+Thus, when searching for peers that have a copy of a new document, it is likely that this document of interest can be found in the repository of a peer you are already connected to.
+We can significantly reduce the amount of discovery network traffic by first querying existing peers, and only performing a global DHT lookup if this fails.
+Perhaps these peers could also forward queries on our behalf, recreating a DHT-like network.
+This is an area for future work.
 
-Finally, in closing for this section, it is worth noting that most current discovery solutions have large side-channel problems. Current implementations broadcast sufficient data that an attacker could passively join to the network, listen for discovery traffic and identify a user's device by the pattern of discovery keys it shares. The attacker need not know the contents of those keys, simply that the same hosts appear to appear and publish them over time. With this information, the attacker could track their target through physical space by monitoring their IP address over time. This is the dark forest from the section title. An attacker can lurk, passively, until a target compromises itself in important ways with no recourse whatsoever. There are a number of defences that could reduce these threat vectors (automatic rotation of discovery keys, or some form of lively proof exchange through a third party prior to exposing IP addresses) but this remains an area of active concern and research.
+\subsection{Metadata Privacy}
 
-\subsection{Networking Conclusions}
+A downside of peer-to-peer protocols is that the peer discovery mechanisms leak information about users to other nodes on the network.
+Although the content of documents is only available to peers who know their URLs, the hashes of URLs are widely broadcast, allowing a user's device to be identified by the pattern of discovery keys it shares.
+With this information, an attacker can monitor a user's IP address over time, and thus track their approximate physical location.
 
-By creating documents out of trustworthy append-only logs with stable names, we enable links and stably-named collaborative documents. A variety of state-of-the-art networking strategies overcomes the limitations of commonly available NAT routers in the field. Unfortunately, these techniques are not reliable enough to eliminate all traffic proxy requirements, and so we employ optional, but helpful network-persistent peers which act as relay points and data caches to improve reliability. (Importantly, they are not a central resource but can be run by any motivated network participant.) Last, we discuss some of our early work in improving discovery strategies for scalability without sacrificing specificity and some of the problems with current distributed hash table implementations today.
+A number of defences could reduce this tracking potential (e.g.\ automatic rotation of discovery keys, or some form of interactive proof exchange through a third party prior to exposing IP addresses), but this remains an area of active concern and research.
 
 \section{Lessons from Implementing PushPin}\label{sec:lessons}
 
@@ -420,6 +437,8 @@ what works, what's not working so well?
 	    \item what's the cross-platform story?
 	\end{itemize}
 \end{itemize}
+
+By creating documents out of trustworthy append-only logs with stable names, we enable links and stably-named collaborative documents. A variety of state-of-the-art networking strategies overcomes the limitations of commonly available NAT routers in the field. Unfortunately, these techniques are not reliable enough to eliminate all traffic proxy requirements, and so we employ optional, but helpful network-persistent peers which act as relay points and data caches to improve reliability. (Importantly, they are not a central resource but can be run by any motivated network participant.) Last, we discuss some of our early work in improving discovery strategies for scalability without sacrificing specificity and some of the problems with current distributed hash table implementations today.
 
 \section{Conclusions}
 \begin{itemize}
