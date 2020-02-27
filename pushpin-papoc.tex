@@ -183,67 +183,82 @@ Electron makes Node.js APIs available to application code, including full access
 (In contrast, in a browser tab, network communication is constrained for security reasons by the same-origin policy~\cite{SameOrigin}.)
 Electron apps are portable across Windows, Linux, and macOS.
 
-\subsection{Persistent State and Ephemeral State}
+\section{A brief, motivating history of web applications}
 
-Every user interaction results in a state change within the application.
-Broadly speaking, there are two types of state:
-\begin{description}
-\item[Persistent state] is saved to disk and replicated to other devices.
-For example, the contents of every board and every card are represented as a JSON \emph{document}.
-We use the Automerge CRDT library~\cite{Automerge,Automerge:2018} to represent all persistent documents, to replicate them, and to automatically merge any updates made concurrently on different devices.
-\item[Ephemeral state] exists only in-memory in the locally running application, and is not replicated.
-Ephemeral state includes the currently viewed board (TODO is this true?), the scroll position within a board view, or the unsaved draft contents of text boxes.
+To understand our approach to developing software with CRDTs it is helpful to contrast it to existing industry practices. Early web applications rendered HTML from a server-side program in response to an HTTP request. That request consisted of a URL and (often) a session cookie. The response was a static document with links in it, and those links made new requests to the webserver.
 
-% TODO: more uses for ephemeral & shared state 
-\end{description}
+The introduction of Javascript created a programmable client environment. For many years this consisted of little more than parlor tricks: mouse-over replacement of images and form validation checks. As time went on, the introduction of AJAX enabled clients to request not whole new pages but new data. Individual pages within sites became active software themselves, and a new era of client-side applications began.
 
-% TODO include an example JSON representation of a card?
+As the relationship between client and server became ever more complicated the ad-hoc programming model for incorporating server state and client state became problematic. Pages were sent from the server half-rendered, with some data incorporated, and then fleshed out by subsequent API requests. Browser client programming became a full-fledged discipline with its own coterie of languages and practicioners, and differentiated itself in skills and techniques from server-side APIs.
 
-% introduce URLs explicitly, explain how one document references another
+The development of functional reactive programming helped to cut this Gordian knot by systematically eliminating much of the complexity of developing client-side software. The source for client pages became largely static \footnote{server-side rendering has some adherents for performance reasons} and communicated using requests to backend APIs.
 
-% On URLs: These stable names are important for collaboration, because users often want to be able to share documents over time, as in the case of an essay as it is being written, or a PushPin board as cards are added to it, and to be able to link that content.
+Functional reactive programming acts by creating a simple, reliable relationship between program state and visualisation. An application state is rendered deterministically into an browser DOM representation, and interactions with the application update the underlying state which triggers updates to the display. Performance is preserved by incremental update algorithms that reconcile the current user-visible DOM representation with the newly updated application state. From the perspective of the application developer, the content is always rendered in a consistent way.
 
-Our earliest prototypes assumed users would have only a single "document" open at a time, and that these documents would be shared by their URLs. We also made no allowances for non-shared state. This model was very limiting, and over time we found we needed a number of additional concepts.
+Although functional reactive programming reduced the complexity of mapping state to display, communication with the back-end APIs that power applications remains largely ad-hoc. The benefit of FRP's simple programming model is eroded by the involvement of asynchronous calls to backing services that can manipulate state. The GraphQL effort by Facebook provides a more structured communication channel between front-end and back-end, the process of managing local and remote state is still quite complex.
 
-We added a messaging system to allow users to broadcast parts of this local state to their peers. We use this to communicate data which is valuable only in the moment and not worthy of recording, such as another users' current selection, or cursor position in a text field.
+\subsection{Document FRP (DFRP)}
 
-\subsection{Functional Reactive Programming}
-The first motivating insight is that functional reactive programming~\cite{Czaplicki:2013ig} is a helpful abstraction. Functional reactive programming works by creating a single, functional loop where a program state is deterministically transformed into a user interface, and where all interactions emitting from the user interface pass through a single function (known as a reducer) which produce the next state.
+We write the state of an FRP program into an Automerge CRDT~\cite{Automerge,Automerge:2018}. By sharing that state with other clients using peer-to-peer networking, PushPin's Document FRP (DFRP) model allows developers to write once-complex local-first software without concern for backend services or big databases. The DFRP model combined with the peer-to-peer distribution system we outline in this paper allows a developer to simply write client-side code and the system will take care of the rest.  
 
-In the simplest case, we tie the program state to an operational CRDT (automerge), and record all changes to that program state into a per-client append-only log which we can broadcast to our other peers. Visibility vectors preserve causality of changes, and for further details of how this process works, please see <some reference here>.
+Consider a simplified PushPin board. The cards on the board are a list of items with positions and dimension and contents. When a user creates a new card, it is inserted into the list, and the instrumenting of the CRDT data structure detects that change and records it as an automerge operation for distribution to other users. If another user moves a card, only the x and y fields are changed and this too becomes a simple change to merge with other changes.
 
-\begin{figure}
-    \centering
-    % diagram depicting FRP + CRDTs here
-    %\includegraphics{}
-    \caption{Caption}
-    \label{fig:my_label}
-\end{figure}
+\fig{FIGURE HERE SHOWING SIMPLE BOARD CHANGES}
 
-\subsection{Composite Views}
+The logical changes -- creation of cards and so on -- are translated into automerge data that is then propagated out through the render function to the user. The origin of these changes is irrelevant, because the result is consistent. A TODO item created on a remote computer follows the same route to the display as one created locally, and automerge guarantees all communicating nodes will produce the same document.
 
-As we approached more sophisticated usage, we came across a simple idea that enabled us to preserve our abstraction while pursuing much more elaborate software. By allowing a pairing of a shareable CRDT document with an FRP renderer to be nested inside another such construct we can build up complex networks of documents each with their own collaborators.
+This is the key: automerge guarantees consistency of data across communicating systems, and FRP guarantees consistency of display.
 
-For example, we can define a "container" which renders a list of documents stored as a CRDT of document URLs, and a user might synchronise the full list across all their own devices, but only share some of them with their other collaborators.
+\subsection{Ephemeral state, local-only & shared}
 
-% i think this is now covered above but left this here for reference
-\begin{comment}
-    how to rationalize all this?
-    \begin{itemize}
-	    \item FRP, for its easily reasoned-about loop: 
-	    \begin{itemize}
-			 \item transform a document functionally into an application view
-			 \item create events in the application that trigger state updates
-			 \item record \& broadcast state updates to peers
-		\end{itemize}
-	    \item many nested \& linked documents, each with their own render function
-	    \begin{itemize}
-		    \item a text note, a chat window, a user profile, a canvas
-		\end{itemize}
-	    \item store all local changes in append-only logs, distribute those logs to other interested peers
-	    \item use cryptographic functions to produce self-validating data
-	\end{itemize}
-\end{comment}
+Our earliest experiments put all data into the CRDT. This quickly proved to be problematic, as many useful data like unsubmitted text in HTML textboxes or cursor positions are ill-suited to universal consensus. Also, some data, like cursor position or timers for tracking animations, can completely swamp the CRDT with low-value information.
+
+The first natural extension then was to redefine the function describing the application state to include a second ephemeral local-only state that is neither persisted nor distributed. Some of this kind of ephemeral or high-velocity data is, however, useful to share with online peers.
+
+It can be helpful to see whether other users are viewing the same document as you, or what text or items they have selected. It might be interesting to see another user's current position in a podcast or video, or a hint that shows they're currently typing into a chat textbox they've not yet submitted.
+
+For this data PushPin uses a special messaging channel adjacent to the CRDT that ties arbitrary messages to a device and user context. The current implementation is rudimentary. The ephemeral data is not associated with a particular CRDT state, and is distributed only over live connections so will not function as expected in complex network topologies or at large scale. Still, it has allowed us to add important liveliness to the user experiene of PushPin. Particularly in distributed applications it is important to communicate the feeling of presence when other users are online or collaborating, because unlike in a centralized system there are many ways to be both online or off.
+
+\subsection{Multiple Documents}
+In actual fact, the contents of a card on a PushPin board are not stored directly in the document for the board, but are each, themselves a PushPin URL. 
+
+A PushPin URL defines two elements: a document URL to render, and the name of a renderer to use to view it. For example, a card URL might look like:
+
+% i made up this coding, and assume it is incorrect
+\begin{code}
+hypermerge:/FJ2NEbKxNM69cdsGtqojSFSJm9JjtNjdASHxAZTywjee?pushpinContentType=board
+\end{code}
+
+This URL is sufficient information to recursively render a child document with its own context, with its own FRP functions, each of which could contain their own sub-documents and renderers.
+
+Decomposing the view into a graph of documents allows for significant simplification of the overall FRP update functions and makes them reusable. The same code that renders a text card, or a user avatar can render that document in some other context. Indeed, it is possible to create generic, reusable renderers that visualise arbitrary documents, or specialised renderers that render the same document in new contexts. A simple example of this is the PushPin title-bar. The current document is re-rendered by a second FRP function that only renders the title field and list of authors. 
+
+
+\subsection{Sharing, permissions}
+
+Every document within PushPin is uniquely identified by a URL. That URL can be reused throughout the application, or shared with another user to begin collaboration. (For example, PushPin supports copying a URL from the application and pasting it into another client to share data.) The URL is a handy but imperfect tool for scoping a collaboration. Because each URL is a stable name associated with a single CRDT it can be shared individually. Further, a recipient can recurse from that document through others to download all the other related documents for a collaboration without learning of the existence of any other data. 
+
+Unfortunately, the stability of these URLs is somewhat problematically strong. The URLs function as a sort of security capability, and once a client has seen the URL, there is no real mechanism in the current system to revoke or rotate it. Further, while we believe CRDTs are an exciting area to explore new collaboration models \cite{Pixelpusher} we have not pursued this effort in PushPin. We have often described our approach in PushPin as "radical mandatory collaboration". Once a document has been shared, a client will always accept all updates to it from all users with the URL anywhere forever. This is, to be clear, not a good design, but rather a deliberate absence of design. 
+
+\subsection{Users}
+
+Opaque cryptographic hashes are difficult to recognize and remember, subject to transcription errors, and don't communicate origin or authorship in the way that traditional web URLs can. Within PushPin, we don't have a centralized account system, but we did want to have a way for users to identify themselves to other participants and share content with those they've met before. We also felt it was important to include in-app document sharing that relied as little as possible on copying and pasting links outside the application.
+
+First, in PushPin we model users as regular documents. Users have a name and a contact photo. This document also stores information about what documents users are sharing as an "outbox". An outbox is an inbox, in reverse. It is a list of documents you'd like other people to be able to access, and the data structure is simple. The "shares" field on a user document is a map from user profile document IDs to a list of URLs being shared. We chose this structure to allow users to post shares for people whose identities they have but who they have not yet connected with. Given Bob's contact information, Alice can post a share for him, then go offline. As long as that data is hosted by some other node in the graph (either a storage peer or a collaborator), when Bob requests Alice's profile document, he can download the relevant data.
+
+Of course, the first and most obvious problem is that these shares should not be plain-text. We solve this problem by obfuscating shares inside a sealed-box encryption payload based on the public key shared by the recipient. This public key is important. If it were to be replaced by another user, that person would hijack access to all documents being sent to the original recipient.
+
+This problem led us to our first experiments in implementing something like "merge permissions" in PushPin. Briefly, this special key is protected by a designation that causes all other authors' writes to the key to be ignored. This limited nod to the notion that users should make informed decisions about which changes they accept was forced by concern for the security of our beta testing group and does not yet reflect a fully considered design.
+
+\subsection{Devices}
+
+PushPin is designed to support not just collaboration between people, but also collaboration across a users' own devices \footnote{Notably, PushPin does not have mobile support and many elements of its design are unavailable on most mainstream mobile devices today.}. A user document includes a list of devices they are associated with, and users are considered online if any of those devices are reachable. Availability of a users' own devices is also important. A user with no other online devices is making changes without a backup. If another of their devices is online, their work can be synchronized there and become more durable. It can be important to a user to understand their relative state to a variety of users. If PushPin has sent a fresh copy of a document to an offline user just a moment ago, that's meaningfully different than if the user does not appear to have used the application in weeks. 
+
+\subsection{Cloud Peers for Storage, Enhanced Connectivity & Other Uses}
+
+As discussed elsewhere, one of our key goals with this project was to make cloud infrastructure optional rather than mandatory, but we recognize that servers have an important role to play in any resilient system. For PushPin, we implemented pushpin-peer, a sibling project that runs the same document sharing stack but as a simple Unix daemon without any visual front-end. The main role for pushpin-peer is data presence. A user can store a URL with pushpin-peer and the tool will download all subsequent versions of that document, spider out through any links within that document (and so on from those), and of course, it can serve up that data to other clients requesting it. We feel this is an important distinction from the notion of "pinning" found in some other systems such as IPFS. In general, PushPin is a creative tool oriented towards storing data created locally by the user or by one of their collaborators. The default should be to preserve everything! In contrast, IPFS is oriented towards generic binary object storage, and so does not assume that interacting with an object would imply wanting to retain it indefinitely.
+
+One of the goals for pushpin-peer was that the UI had to be self-hosted, which is to say that all the interactions with it should occur within PushPin and not in some other web administration tool. When pushpin-peer starts up, it prints out a URL that users can load from their PushPin. Users interact with their cloud peer from within PushPin by making edits to PushPin's adminstration document. The pushpin-peer daemon monitors that document for changes and takes actions based on what it finds. This approach was first pioneered in our work on pixelpusher, and has returned with greater sophistication here. Most importantly, pushpin-peer uses similar techniques to the user document sharing approach described above to allow clients to write private URLs to a document other peers may read without disclosing their contents.
 
 % Many P2P protocols require sending and receiving arbitrary UDP packets.
 % However, web browsers restrict network communication for security reasons, in particular through the \emph{same-origin policy}~\cite{SameOrigin}, making it impossible to implement such protocols in JavaScript alone.
@@ -380,7 +395,7 @@ This is an area for future work.
 \subsection{Metadata Privacy}
 
 A downside of peer-to-peer protocols is that the peer discovery mechanisms leak information about users to other nodes on the network.
-Although the content of documents is only available to peers who know their URLs, the hashes of URLs are widely broadcast, allowing a user's device to be identified by the pattern of discovery keys it shares.
+Although the content of documents is only available to peers who know their URLs, the discovery keys (hashes of URLs) are widely broadcast, allowing a user's device to be identified by the pattern of discovery keys it shares.
 With this information, an attacker can monitor a user's IP address over time, and thus track their approximate physical location.
 
 A number of defences could reduce this tracking potential (e.g.\ automatic rotation of discovery keys, or some form of interactive proof exchange through a third party prior to exposing IP addresses), but this remains an area of active concern and research.
