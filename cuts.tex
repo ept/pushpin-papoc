@@ -1,0 +1,28 @@
+\begin{figure*}
+\begin{verbatim}
+{
+  "name": "Peter van Hardenberg"
+  "avatar": "hypermerge:/DaWBgZASxr6ksJHtsx5FC7Ug9hANRgmYxTNaHX9J3oG5?contentType=image",
+  "devices": [
+    "hypermerge:/VKwCjhq9LY3w3wr8tqF2JoHpqafs1zxLmMMCNM1aUP9?contentType=device",
+    "hypermerge:/KQoZYf8c31dgpasC7iaXAvrZJtRzQL7Q1dMyAJRNAyQ?contentType=device"
+  ]
+}
+\end{verbatim}
+\caption{JSON document representing a PushPin user, containing their name, avatar image, and links to their devices.}
+\label{fig:user-json}
+\end{figure*}
+
+In the early days of the web, browsers traversed static HTML. As time went on, web applications became increasingly powerful and a separation of responsibilities between server-side and client-side code emerged. Conceptually, a Single Page App (SPA) is a static program which runs in the client's browser and makes requests to server-side APIs for the data it requires to respond to user input. (Practically speaking it is common to blur these distinctions, such as by doing some server-side rendering of initial state.) Managing the state of the client-side application in an ad-hoc way can be difficult, managing the currently rendered state of the browser, overlapping web requests, user input, and so on. 
+
+
+\subsection{Users}
+
+Opaque cryptographic hashes are difficult to recognize and remember, subject to transcription errors, and don't communicate origin or authorship in the way that traditional web URLs can. Within PushPin, we don't have a centralized account system, but we did want to have a way for users to identify themselves to other participants and share content with those they've met before. We also felt it was important to include in-app document sharing that relied as little as possible on copying and pasting links outside the application.
+
+First, in PushPin we model users as regular documents. Users have a name and a contact photo. This document also stores information about what documents users are sharing as an "outbox". An outbox is an inbox, in reverse. It is a list of documents you'd like other people to be able to access, and the data structure is simple. The "shares" field on a user document is a map from user profile document IDs to a list of URLs being shared. We chose this structure to allow users to post shares for people whose identities they have but who they have not yet connected with. Given Bob's contact information, Alice can post a share for him, then go offline. As long as that data is hosted by some other node in the graph (either a storage peer or a collaborator), when Bob requests Alice's profile document, he can download the relevant data.
+
+Of course, the first and most obvious problem is that these shares should not be plain-text. We solve this problem by obfuscating shares inside a sealed-box encryption payload based on the public key shared by the recipient. This public key is important. If it were to be replaced by another user, that person would hijack access to all documents being sent to the original recipient.
+
+This problem led us to our first experiments in implementing something like "merge permissions" in PushPin. Briefly, this special key is protected by a designation that causes all other authors' writes to the key to be ignored. This limited nod to the notion that users should make informed decisions about which changes they accept was forced by concern for the security of our beta testing group and does not yet reflect a fully considered design.
+
