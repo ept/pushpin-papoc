@@ -39,3 +39,71 @@ Unfortunately, the stability of these URLs is somewhat problematically strong. T
 \subsection{Online/Offline State}
 
 PushPin is designed to support not only collaboration between people, but also synchronisation across multiple devices belonging to the same user. A user document includes a list of devices they are associated with, and users are considered online if any of those devices are reachable. Availability of a user's own devices is also important. A user with no other online devices is making changes without a backup. If another of their devices is online, their work can be synchronised there and become more durable. It can be important to a user to understand their relative state to a variety of users. If PushPin has sent a fresh copy of a document to an offline user just a moment ago, that's meaningfully different than if the user does not appear to have used the application in weeks. 
+
+% cut discussion of automerge performance
+
+
+% this was section 6
+
+\section{Lessons from Implementing PushPin}\label{sec:lessons}
+
+Our goal in building PushPin was to explore whether it was possible to apply recent developments in CRDTs and peer-to-peer networking with modern web development technologies to produce an application with several properties.
+
+Those properties are:
+ - long-now reliability, by not relying on external network services
+ - real-time collaboration throughout the software
+ - consistent performance with low latency
+ - a high degree of usability for a general audience 
+
+Because of the first and second goals Peer-to-peer systems have a number of unique challenges versus centralised systems, including:
+
+\begin{itemize}
+	\item no single source of truth, no single authority
+
+	Without a centralised server hosting an authoritative copy, every copy of the data becomes, in some sense, authoritative. This implies that we must have some kind of robust merging strategy at the core of our design.
+	
+	\item devices get out of sync
+
+    Because we insist that each device is always able to make progress without communication with other nodes, it is vitally important to both do our best to synchronise our various devices, but also to communicate synchronisation state. What were the last changes received from our laptop? Did the changes we made locally get uploaded to a server before the network connection was lost?  
+
+    \item connectivity is non-boolean
+
+    With a centralised system a user is either offline or online. The central node routes all data. With a peer-to-peer system is is entirely possible that you might be connected with another user around the world but due to the complexities of computer networking, disconnected from a user in the same room. (Perhaps their wifi connection is offline.) 
+
+    \item changes can come from anywhere at any time
+
+    Without the centralised system approving or rejecting changes against a monotonically incrementing API version, it's possible that other clients are running older, newer, or just different versions of the program. How do we robustly manage change over time?
+    
+    \item different devices might be running different versions of the software, and they need to interoperate cleanly
+\end{itemize}
+
+It is a sad truth that peer-to-peer software has earned a rather poor reputation not just for reliability but also as a vector of illicit activity. Because of this, router vendors and network administrators both collude to restrict peer-to-peer communications and simply fail to support them.
+
+what works, what's not working so well?
+
+\begin{itemize}
+    \item FRP render loop works great -- taking a functional transform of a document state to application view means never worrying about where the update came from or how to render it
+	\item storing \& distributing append-only logs is very simple and robust
+    \item peer-to-peer networking is highly problematic
+    \begin{itemize}
+	    \item webrtc (not very good, requires centralized assets)
+		\item DHTs (reliability, privacy)
+		\item centralized services (fragility)
+		\item router configuration issues
+	\end{itemize}
+	\item much performance work has been done
+	\begin{itemize}
+	    \item architect to separate render \& computation of CRDT operations
+	\end{itemize}
+	\item conflict resolution surprisingly unproblematic
+	\item merge \& collaboration UX is largely unexplored (could show a pixelpusher slide \& briefly explain problems)
+	\item what kind of identity, privacy, sharing features are important / feasible here?
+	\item html is a pretty rough application development platform
+	\item no real mobile support
+	\begin{itemize}
+	    \item what's the cross-platform story?
+	\end{itemize}
+	\item URLs containing long alphanumeric strings (corresponding to cryptographic keys) are a poor user experience. We would like to minimise the degree to which users have to copy and paste them.
+\end{itemize}
+
+By creating documents out of trustworthy append-only logs with stable names, we enable links and stably-named collaborative documents. A variety of state-of-the-art networking strategies overcomes the limitations of commonly available NAT routers in the field. Unfortunately, these techniques are not reliable enough to eliminate all traffic proxy requirements, and so we employ optional, but helpful network-persistent peers which act as relay points and data caches to improve reliability. (Importantly, they are not a central resource but can be run by any motivated network participant.) Last, we discuss some of our early work in improving discovery strategies for scalability without sacrificing specificity and some of the problems with current distributed hash table implementations today.

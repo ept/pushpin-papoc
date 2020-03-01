@@ -421,7 +421,7 @@ However, mobile devices often use networks with NAT on which UPnP is not availab
 
 In these cases, the most viable solution is known as ``hole punching'' or NAT traversal \cite{RFC5389}.
 This process requires the temporary intervention of a third host to introduce the two peers, and both peers sending UDP packets to each other, allowing a connection to be established.
-NAT traversal is performed by BitTorrent's uTP protocol, and by the STUN protocol in WebRTC \cite{RFC5389}.
+NAT traversal is performed by BitTorrent's uTP\cite{BEP29} protocol, and by the STUN protocol in WebRTC \cite{RFC5389}.
 
 However, there are situations in which neither the LAN discovery approach nor NAT traversal works.
 For example, some coffee-shop WiFi and some corporate networks are set up in a ``guest network'' mode, which prevents all local connections between devices on the network (intended as a security measure to prevent inadvertent sharing of data with other users on a public network).
@@ -493,100 +493,30 @@ With this information, an attacker can monitor a user's IP address over time, an
 
 A number of defences could reduce this tracking potential (e.g.\ automatic rotation of discovery keys, or some form of interactive proof exchange through a third party prior to exposing IP addresses), but this remains an area of active concern and research.
 
-
-\section{Lessons from Implementing PushPin}\label{sec:lessons}
-
-Our goal in building PushPin was to explore whether it was possible to apply recent developments in CRDTs and peer-to-peer networking with modern web development technologies to produce an application with several properties.
-
-Those properties are:
- - long-now reliability, by not relying on external network services
- - real-time collaboration throughout the software
- - consistent performance with low latency
- - a high degree of usability for a general audience 
-
-Because of the first and second goals Peer-to-peer systems have a number of unique challenges versus centralised systems, including:
-
-\begin{itemize}
-	\item no single source of truth, no single authority
-
-	Without a centralised server hosting an authoritative copy, every copy of the data becomes, in some sense, authoritative. This implies that we must have some kind of robust merging strategy at the core of our design.
-	
-	\item devices get out of sync
-
-    Because we insist that each device is always able to make progress without communication with other nodes, it is vitally important to both do our best to synchronise our various devices, but also to communicate synchronisation state. What were the last changes received from our laptop? Did the changes we made locally get uploaded to a server before the network connection was lost?  
-
-    \item connectivity is non-boolean
-
-    With a centralised system a user is either offline or online. The central node routes all data. With a peer-to-peer system is is entirely possible that you might be connected with another user around the world but due to the complexities of computer networking, disconnected from a user in the same room. (Perhaps their wifi connection is offline.) 
-
-    \item changes can come from anywhere at any time
-
-    Without the centralised system approving or rejecting changes against a monotonically incrementing API version, it's possible that other clients are running older, newer, or just different versions of the program. How do we robustly manage change over time?
-    
-    \item different devices might be running different versions of the software, and they need to interoperate cleanly
-\end{itemize}
-
-It is a sad truth that peer-to-peer software has earned a rather poor reputation not just for reliability but also as a vector of illicit activity. Because of this, router vendors and network administrators both collude to restrict peer-to-peer communications and simply fail to support them.
-
-what works, what's not working so well?
-
-\begin{itemize}
-    \item FRP render loop works great -- taking a functional transform of a document state to application view means never worrying about where the update came from or how to render it
-	\item storing \& distributing append-only logs is very simple and robust
-    \item peer-to-peer networking is highly problematic
-    \begin{itemize}
-	    \item webrtc (not very good, requires centralized assets)
-		\item DHTs (reliability, privacy)
-		\item centralized services (fragility)
-		\item router configuration issues
-	\end{itemize}
-	\item much performance work has been done
-	\begin{itemize}
-	    \item architect to separate render \& computation of CRDT operations
-	\end{itemize}
-	\item conflict resolution surprisingly unproblematic
-	\item merge \& collaboration UX is largely unexplored (could show a pixelpusher slide \& briefly explain problems)
-	\item what kind of identity, privacy, sharing features are important / feasible here?
-	\item html is a pretty rough application development platform
-	\item no real mobile support
-	\begin{itemize}
-	    \item what's the cross-platform story?
-	\end{itemize}
-	\item URLs containing long alphanumeric strings (corresponding to cryptographic keys) are a poor user experience. We would like to minimise the degree to which users have to copy and paste them.
-\end{itemize}
-
-By creating documents out of trustworthy append-only logs with stable names, we enable links and stably-named collaborative documents. A variety of state-of-the-art networking strategies overcomes the limitations of commonly available NAT routers in the field. Unfortunately, these techniques are not reliable enough to eliminate all traffic proxy requirements, and so we employ optional, but helpful network-persistent peers which act as relay points and data caches to improve reliability. (Importantly, they are not a central resource but can be run by any motivated network participant.) Last, we discuss some of our early work in improving discovery strategies for scalability without sacrificing specificity and some of the problems with current distributed hash table implementations today.
-
 \section{Conclusions}
 
-Let us begin by reiterating our goals:
+Let us begin by reiterating our objectives. We define success as delivering software which is fast, reliable, and useful. By that we mean specifically that the software should:
 \begin{itemize}
-    \item To deliver 
+    \item respond on the next frame to all input
+    \item allow local progress at all times
+    \item allow collaboration in all network conditions
+    \item should not rely on any singleton or centralised services
 \end{itemize}
 
-CRDT / Application Model
-\begin{itemize}
-	\item We find modelling collaboration sessions as Automerge CRDTs is effective
-	\item Tying CRDTs to user interfaces via FRP reduces complexity by funneling local and remote changes through a consistent process and eliminates ad-hoc calls to APIs
-	\item Our DFRP approach makes all collaboration real-time by default
-	\item We can build up complex application states by rendering several related documents (directories, text notes, user profiles) each with their own context-specific rendering function for a particular CRDT
-	\item It is important to have stable names referring to data that evolves over time, content hashing is not effective
-	\item Automerge's performance is adequate for building real user applications
-\end{itemize}
+We believe that distributing data stored in the Automerge CRDT over a peer-to-peer system based on Dat, interacting with the data through a React FRP rendering engine and delivering it to clients as an Electron application meets these goals.
 
-Networking
-\begin{itemize}
-    \item Peer-to-peer networking has three stages: content discovery, connection establishment, and synchronisation
-    \item The most promising techniques for discovery are based on the distributed hash tables pioneered by BitTorrent, supplemented by mDNS locally
-    \item Connection establishment is complicated by the widespread assumption of client-server architectures and widespread NAT routing
-    \item Connectivity in public environments like cafes and corporate offices can be particularly challenging 
-    \item The state of the art for NAT traversal in public environment is "hole punching", built on top of UDP. PushPin uses UTP, also from BitTorrent
-    \item 
-    \item Autonomic (self-validating data) is an valuable concept in a low-trust environment
-	\item 
-\end{itemize}
+\subsection{CRDT / Application Model}
 
-Future work
+In more detail, associating an Automerge CRDT to an HTML user interfaces via  the FRP programming model reduces complexity for authors of distributed systems. This is because it funnels local and remote changes through a consistent process and eliminates ad-hoc calls to APIs. All CRDT changes can be distributed either live or asynchronously, providing real-time collaboration by default.
+
+Complex application states can be built up by rendering several related documents (directories, text notes, user profiles) each with their own context-specific rendering function for a particular CRDT. The URLs to describe these CRDTs should be self-validating and remain stable during changes. (Content hashing is not effective.)
+
+\subsection{Networking}
+
+Peer-to-peer networking has three stages: content discovery, connection, and synchronisation. The most promising techniques for discovery are based on the distributed hash tables pioneered by BitTorrent, supplemented by mDNS locally. Connection is complicated by the widespread assumption of client-server architectures and widespread NAT routing, and connectivity in public environments like cafes and corporate offices can be particularly challenging.  The state of the art for NAT traversal in public environment is "hole punching", PushPin uses UTP to mitigate this, a NAT-traversing protocol inherited from BitTorrent, but it is imperfect. As with BitTorrent, by replicating self-validating data, the system avoids many concerns about trusting data origin.
+
+
+\subsection{Future work}
 \begin{itemize}
     \item Migrating data between versions and preventing invalid document states remains a concerning problem
     \item Establishing direct peer-to-peer connectivity is problematic in several important environments
