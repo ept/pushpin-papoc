@@ -107,3 +107,9 @@ what works, what's not working so well?
 \end{itemize}
 
 By creating documents out of trustworthy append-only logs with stable names, we enable links and stably-named collaborative documents. A variety of state-of-the-art networking strategies overcomes the limitations of commonly available NAT routers in the field. Unfortunately, these techniques are not reliable enough to eliminate all traffic proxy requirements, and so we employ optional, but helpful network-persistent peers which act as relay points and data caches to improve reliability. (Importantly, they are not a central resource but can be run by any motivated network participant.) Last, we discuss some of our early work in improving discovery strategies for scalability without sacrificing specificity and some of the problems with current distributed hash table implementations today.
+
+
+%%% should we address this?
+The user can manage this data like any other local files, e.g.\ copying it, backing it up, or converting it into another format. % XXX ... can they? this is possible in principle but not actually well-supported in pushpin
+
+% (It should be noted that in practice today, the BitTorrent DHT has proven itself operationally resilient but other implementations such as IPFS have struggled to remain useful during flooding attacks.)

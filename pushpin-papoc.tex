@@ -14,7 +14,7 @@
 \hyphenation{Web-RTC}
 
 \begin{document}
-\title{PushPin: Towards Production-Quality  Peer-to-Peer Collaboration}
+\title{PushPin: Towards Production-Quality Peer-to-Peer Collaboration}
 
 \author{Peter van Hardenberg}
 \email{pvh@inkandswitch.com}
@@ -89,7 +89,7 @@ However, reliance on the cloud comes with problems: services require ongoing mai
 If a cloud service shuts down, users lose access to all data stored in that service, unless some migration path to an alternative service is provided.
 Moreover, cloud-centric software often does not work well offline, and can be slow as the client waits for round-trips to the server in order to load or store data there.
 
-Peer-to-peer application software promises to overcome these problems.
+Peer-to-peer (P2P) application software promises to overcome these problems.
 In principle, a P2P system should be able to function indefinitely, without depending on someone paying the server bills to keep a cloud service running.
 Storing an authoritative copy of data on the users' devices enables offline work and stronger data ownership~\cite{LocalFirst}, and synchronising updates through a P2P network should allow the same kind of real-time collaboration that we know from cloud software.
 
@@ -106,23 +106,10 @@ We approach this project with broad interests in exploring programming models, P
 In summary, our findings are:
 \begin{itemize}
     \item CRDTs provide a reliable, principled foundation for P2P collaboration.
-    We found the details of conflict resolution semantics to be surprisingly unimportant, as conflicts seem to occur rarely in practice.
-    \item The Functional Reactive Programming (FRP) approach is a good way of creating user interfaces on top of state managed by CRDTs (Section~\ref{sec:data-model-ui}).
-    \item P2P protocols are poorly supported by many network routers (Section~\ref{sec:networking}).
-    Consequently, the use of servers to forward network traffic is sometimes unavoidable.
-    \item The performance of CRDTs and P2P replication implementations becomes problematic as the amount of data grows. The storage and processing overheads of current implementations are substantial.
+    \item Functional Reactive Programming (FRP) is effective for synchronizing user interfaces with state managed by CRDTs (Section~\ref{sec:data-model-ui}).
+    \item P2P protocols work in many cases, but are poorly supported by many network routers (Section~\ref{sec:networking}).
     \item Significant open problems remain, including around authentication and access control, indexing and search, schema evolution and compatibility, privacy, and the usability of systems where some devices are in sync while others are not.
 \end{itemize}
-
-% The prize for delivering a truly peer-to-peer application development system is great.
-% centralised cloud-based software has created the expectation of universal access to both canonical versions of software and to users' data from any internet-connected computer at any moment, with full collaborative functionality built in.
-
-%To this end, we must reconsider our relationship with vast centralised databases and explore new methodologies for building software.
-
-% document CRDTs
-% functional reactive programming
-% browser rendering
-% "document oriented programming"
 
 \section{Design Principles}\label{sec:principles}
 
@@ -130,21 +117,18 @@ Before going into the details of the implementation of PushPin we outline the pr
 
 \subsection{Local-first software}
 
-While we want users' data to be accessible on multiple devices, the authoritative copies of this data should reside on the users' local computers, not in the cloud.
-If servers are used, these replicas should be considered secondary copies that exist only to facilitate data synchronisation and backup, but they should not be considered authoritative.
+While we want users' data to be accessible on multiple devices, authoritative copies of this data should reside on users' local computers.
+When servers are used, these replicas are primarily to facilitate data synchronisation and backup.
 In previous work we have coined the term \emph{local-first software} to describe software that adheres to this principle~\cite{LocalFirst}.
 
 With a local-first approach, the software continues working fully if the user's computer is disconnected from the Internet: cross-device synchronisation happens in the background when a network connection is available.
 Even if all servers are shut down, the copy of the data on the local disk remains fully functional and under the user's control.
-The user can manage this data like any other local files, e.g.\ copying it, backing it up, or converting it into another format.
 
 \subsection{Minimal dependence on servers}
 
-We want the software to continue working indefinitely, without being vulnerable to outages if the organisation running some piece of infrastructure goes out of business.
-Thus, in addition to local data storage on each device, the cross-device data synchronisation mechanism should also depend on servers to the least degree possible.
+We wish for our software to avoid dependence on servers. Server infrastructure is fragile, and can be both expensive and laborious to operate and maintain. Further, it is obviously not available to clients without internet access. By architecting our software to avoid server dependency, we improve resilience and durability of our software.
 
-In some environments it is possible to operate entirely without servers, while in other cases a small amount of centralised infrastructure seems to be inevitable with current technologies.
-However, if servers are used, we want them to be as simple, generic, and fungible as possible, so that one unavailable server can easily be replaced by another.
+Thus, in addition to local data storage on each device, the cross-device data synchronisation mechanism should also depend on servers to the least degree possible, and servers should avoid taking unnecessary responsibilities. Where servers are used, we want them to be as simple, generic, and fungible as possible, so that one unavailable server can easily be replaced by another. Further, these servers should ideally not be centralised. Any user or organisation should be able to provide servers to serve their needs.
 
 \subsection{Conflict-free data synchronisation}
 
@@ -156,12 +140,15 @@ Rather, we have to accept that each device has its own local view onto the share
 As devices exchange updates, they converge again by merging their states.
 We do this using conflict-free replicated data types (CRDTs)~\cite{Shapiro:2011un}.
 
+Not all software is obviously suitable for implementation through this model. For example, some corporate systems are built around robust hierarchies of access controls. While it may be possible in time to recreate these structures atop CRDTs, applications where data is primarily held by an individual are a more obvious first frontier to explore.   
+
 \subsection{Mainstream, as far as possible}
 
 In order to explore the \emph{user experience} implications of a peer-to-peer architecture, we wanted to develop not just a rough research prototype, but polished end-user software that is on par with commercial applications available today, with a thoughtful graphical and interaction design.
 We also wanted to explore the \emph{developer experience} of peer-to-peer software, to understand how writing software with this architecture could become accessible to mainstream software engineers.
 Thus, we wanted to base our work on mainstream languages and platforms as far as possible.
 
+% XXX I will provide a newer figure
 \begin{figure*}
     \centering
     \includegraphics[width=0.7\textwidth]{pushpin.jpg}
@@ -172,32 +159,32 @@ Thus, we wanted to base our work on mainstream languages and platforms as far as
 \section{PushPin: A Collaborative Corkboard}\label{sec:pushpin}
 
 The PushPin software~\cite{PushPinSource}, shown in Figure~\ref{fig:pushpin}, allows users to collect media of various types (including text, web pages, images, and PDF files), to archive and organise it.
-Media files are visually represented as \emph{cards} on an infinite two-dimensional \emph{board}, where they can be resized and positioned arbitrarily.
+Media files are visually represented as \emph{cards} on a two-dimensional \emph{board}, where they can be resized and positioned arbitrarily.
 One board may be nested within another board, enabling hierarchical organisation and navigation.
-This board metaphor is inspired by software such as Miro~\cite{Miro} and Milanote~\cite{Milanote}.
+This board metaphor is inspired by software such as Hypercard~\cite{Hypercard}, Miro~\cite{Miro} and Milanote~\cite{Milanote}.
 
-We chose this application because it fits well with the principles articulated in Section~\ref{sec:principles}: the data in this software belongs to the user, and there are essentially no restrictions as to what the user may do with their data.
+This application fits well with the principles articulated in Section~\ref{sec:principles}: the data in this software belongs to the user, and there are essentially no restrictions as to what the user may do with their data.
 Unlike some systems (e.g.\ banking or payment systems, auction websites, ride-sharing services, or games), in this application there is no need to enforce any global rules or consensus across users, and there is no need for an authority to decide what actions are allowed.
 The only restrictions are access permissions (i.e.\ defining which user may view or modify which pieces of data), but we assume that a user with permission to edit some piece of data may modify it in any way.
 
-
 \subsection{Building desktop software with Electron}
 
-In recent years there has been considerable innovation in web application technologies, including in web browsers (new features of HTML and CSS), languages (e.g.\ TypeScript), user interface libraries (especially React~\cite{React}), and JavaScript modules for a wide variety of tasks (e.g.\ PDF rendering~\cite{PDFjs}).
-In order to take advantage of this lively ecosystem, we decided to implement PushPin using web technologies.
+The web browser has become the de-facto standard for cross-platform development. It has a robust ecosystem of programming languages (e.g.\ TypeScript), frameworks (especially React~\cite{React}) and utility libraries (e.g.\ PDF rendering~\cite{PDFjs}). The browser continues to become a more powerful execution and rendering environment, with new features for HTML and CSS always evolving. The browser is also home to perhaps the largest community of developers. Thus, by building PushPin within this ecosystem, we gain access to these tools, and hope to remain accessible to a large community of developers.
 
-However, web applications running in a browser tab have constraints that make them unsuitable for local-first/P2P use. These constraints fall in two categories:
+Unfortunately, web applications running in a traditional browser have constraints that make them unsuitable for local-first/P2P use. These constraints fall in two categories:
+
 \begin{description}
+
 \item[Storage.]
-By default, browsers do not reliably store data.
-Web applications can use localStorage, IndexedDB or Progressive Web App features to store data on disk, but this data is silently deleted when a user chooses to clear cookies in their browser~\cite{LocalStorageCleared}, and browser caches can expire data without notification.
-Users have no way of predicting whether their data or the application will be available offline.
+By default, browsers do not reliably store data or software. The Progressive Web Application standard, and APIs like localStorage or IndexedDB provide some functionality to preserve local copies of software and preserve data locally, but these systems are slow, and worse, often silently lose user data. These APIs appear to be built with the assumption that user data is a local cache, and not authoritative, and are prone to being expired without warning or notification~\cite{LocalStorageCleared}.
+As a result, users have no way of predicting whether their data or the application will be available offline.
 
 Sometimes, manual steps are required: for example, Google Docs requires installing a special browser extension to enable offline support, and it only makes documents available offline when they are specifically selected by the user. Anecdotally, it appears to be common for users to think they had enabled offline usage, only to realise later that their data is unavailable.
 
+Loss of user data is a cardinal sin, and the fact that browsers are unreliable keepers of locally persisted data is disqualifying for local-first implementations. Electron, on the other hand, provides full access to the users' local file system through a variety of approaches.
+
 \item[Networking.]
-For security reasons, web browsers restrict the network communication that application code can perform: client-server requests are restricted to HTTP or WebSocket, and are subject to the same-origin policy \cite{SameOrigin}. Peer-to-peer communication is restricted to WebRTC (see Section~\ref{sec:existing-p2p}).
-It is not possible to use arbitrary TCP or UDP networking, which would be required to implement other peer-to-peer protocols.
+For security reasons, web browsers restrict the network communication that application code can perform: requests are restricted to client-server protocols such as HTTP or WebSocket, and are subject to the same-origin policy \cite{SameOrigin}. Even the built-in WebRTC peer-to-peer communication requires a centralised server to broker connections (see Section~\ref{sec:existing-p2p}). It is not possible to use arbitrary TCP or UDP networking, which would be required to implement other peer-to-peer protocols.
 \end{description}
 
 We avoid these limitations by building on Electron~\cite{Electron}.
@@ -216,11 +203,11 @@ Thus, Electron allows software engineers with web development skills to write cr
     "hypermerge:/6YTvUkNePGkPJH3fHaCoJfJdVdKbi6qjDKgp27u3SChG?contentType=contact"
   ],
   "cards": [
-    { "x": 0, "y": 0, "w": 577, "h": 484,
+    { "x": 0, "y": 0, "width": 577, "height": 484,
       "url": "hypermerge:/4uhU1SDgy56cAo3dQH5tqSrrTAZnQSQKkEUPzNUXSvcV?contentType=image" },
-    { "x": 0, "y": 486, "w": 577, "h": 95,
+    { "x": 0, "y": 486, "width": 577, "height": 95,
       "url": "hypermerge:/HHmxeCceWD1ZBrXKeHPv7k7umVW2ncsWyVrUiV3cmMYP?contentType=text" },
-    { "x": 612, "y": 84, "w": 370, "h": 862,
+    { "x": 612, "y": 84, "width": 370, "height": 862,
       "url": "hypermerge:/E6qRRVUsbRcjddCV98TLyyRhPsVNgyiUXAdPsLyKM3mn?contentType=todo-list" }
   ]
 }
@@ -231,7 +218,6 @@ Thus, Electron allows software engineers with web development skills to write cr
 
 
 \subsection{Automerge Documents}\label{sec:documents}
-
 All application state in PushPin is managed by Automerge~\cite{Automerge:2018,Automerge}, a JavaScript CRDT library that provides a JSON data model~\cite{Kleppmann:2017ca}.
 Automerge defines a format in which data updates can be written to local disk and replicated to instances of PushPin on other devices.
 Network communication is provided by a separate layer called Hypermerge, which we discuss in Section~\ref{sec:networking}.
@@ -242,9 +228,9 @@ For this reason, we represent each card and each board as a separate document.
 
 For example, Figure~\ref{fig:board-json} shows the JSON representation of a board.
 It contains a \texttt{title} (rendered in the toolbar in Figure~\ref{fig:pushpin}), a list of users who have contributed to the board, and a list of cards on the board.
-Each card has \texttt{x} and \texttt{y} attributes recording its position, \texttt{w} and \texttt{h} attributes for width and height, and a \texttt{url} linking to its content (in a separate document).
+Each card has \texttt{x}, \texttt{y}, \texttt{width} and \texttt{height}  attributes recording its dimensions, and a \texttt{url} linking to the document that stores its content. The URL also includes a "contentType" attribute, which informs the application which code tot select to render the document.
 
-Automerge allows state to be concurrently updated on different devices, and it ensures that replicas converge to the same state as they communicate.
+Automerge allows state to be concurrently updated on different devices, and ensures that replicas converge to the same state as they communicate.
 For example, if a user drags a card to a new position, this state change is modelled by updating the \texttt{x} and \texttt{y} attributes of that card, while the rest of the document remains unchanged.
 If another user concurrently creates a new card on another device, it is inserted into the list of cards.
 The CRDT tracks that change and records it as an Automerge operation for replication.
@@ -266,6 +252,8 @@ This parameter is part of the URL, not the document content, because the same do
 For example, PushPin could be extended to support flashcards for language learning.
 In one context, the document containing the database of flashcards could be rendered as a list of entries, while in another context it might be rendered as a quiz interface, presenting one side of one card at a time.
 
+% would a small figure depicting the nesting of documents & renderers help here?
+
 \begin{figure*}
 \centering
 \includegraphics{document-frp.pdf}
@@ -275,8 +263,7 @@ In one context, the document containing the database of flashcards could be rend
 
 \section{Creating User Interfaces for CRDTs}\label{sec:data-model-ui}
 
-In traditional, server-centric web applications, synchronisation between client-side and server-side state is usually performed in an ad-hoc way, with user actions translating into HTTP requests that perform API calls on a server.
-In contrast, CRDTs provide us with a principled way of managing and reasoning about the state of multiple replicas: each replica can optimistically update its local state, and a synchronisation protocol running in the background ensures that those replicas eventually converge~\cite{Saito:2005jw}.
+In traditional, server-centric web applications, the server is considered the sole authority and synchronisation between client-side and server-side state is usually performed in an ad-hoc way, with user actions translating into HTTP requests that perform API calls on a server. In contrast, CRDTs provide us with a principled way of managing and reasoning about the state of multiple replicas: each replica can optimistically update its local state, and a synchronisation protocol running in the background ensures that those replicas eventually converge~\cite{Saito:2005jw}.
 
 However, the convergence we have discussed so far is at the level of Automerge documents, such as the JSON shown in Figure~\ref{fig:board-json}.
 In this section we will expand the discussion to include the state of the user interface.
@@ -308,41 +295,33 @@ When any such events occur, the Automerge document is updated to reflect the use
 This local interaction can be performed regardless of whether the user is currently connected to the Internet.
 
 Likewise, whenever the network synchronisation protocol running in the background receives an update from another replica, Automerge applies this update to the CRDT state.
-We then again call the render function with this updated state, which refreshes the user interface accordingly.
-Thus, the user interface logic makes no distinction between a local user's updates and remote updates received over the network: both simply result in a call to the render function.
+We then again call the render function with this updated state, which refreshes the user interface accordingly. Thus, the user interface logic makes no distinction between a local user's updates and remote updates received over the network: both simply result in a call to the render function.
 
-In applications written in the DFRP style, the developer never needs to worry about API calls to a server backend, or the fact that they may fail.
-Instead, all communication is via shared CRDT state that can be updated by any collaborator at any time.
-This means DFRP software can actually be \emph{simpler} to develop than traditional web applications, even though it is also more powerful.
-
-% challenges: getting into weird states, write permissions
+In applications written in the DFRP style, the developer never needs to worry about API calls to a server backend, or the fact that they may fail. Instead, all communication is via shared CRDT state that can be updated by any collaborator at any time. This means DFRP software can actually be \emph{simpler} to develop than traditional web applications, even though it is also more powerful.
 
 \subsection{Ephemeral Versus Persistent State}
 
-In our earliest experiments we put all application state into the CRDT. This quickly proved to be problematic: for some types of state, such as unsubmitted text in HTML textboxes or cursor positions, each PushPin instance should have its own state~--- making all replicas converge to the same state is undesirable in these cases.
+The most rudimentary approach to DFRP is to keep all application state in a single CRDT. This is problematic: for some types of state, such as unsubmitted text in HTML textboxes, or page scroll positions, each PushPin instance should have its own state~--- making all replicas converge to the same state is undesirable in these cases.
 
-Also, some fast-changing data, like cursor position or timers for performing animations, can swamp the CRDT with low-value information; there is no reason to persist such updates.
-We therefore extended the application state so that it consists of two parts: persistent state that is replicated, and ephemeral state that exists only locally.
+Also, some fast-changing data (e.g. mouse position or animation timers), could swamp the CRDT with low-value information; there is no reason to persist such updates.
+We therefore divide the application state into two parts: persistent state that is replicated, and ephemeral state that exists only locally.
 
-However, we may want to share some of this ephemeral data with peers that are currently online: it can be helpful to see whether other users are viewing the same document as you, where their cursor is located, or which items they have selected. It might be interesting to see another user's current position in a podcast or video, or a hint that shows they are currently typing into a chat textbox but have not yet submitted.
+Still, we may wish to share ephemeral data with peers that are currently online: it can be helpful to see whether other users are viewing the same document as you, where their cursor is located, or which items they have selected. It might be interesting to see another user's current position in a podcast or video, or a hint that shows they are currently typing into a chat textbox but have not yet submitted.
 
-For ephemeral updates PushPin uses an additional messaging channel, adjacent to the CRDT, which ties arbitrary messages to a device and user context. The current implementation is rudimentary: ephemeral data is not associated with a particular CRDT state, and is distributed only over live connections, so it will not function as expected in complex network topologies or at large scale. Nevertheless, it has allowed us to add important contextual awareness to the user experience of PushPin. In distributed applications it is particularly important to communicate the feeling of presence when other users are online or collaborating.
-
-% Cut this because we haven't yet explained the degrees of offline/online-ness at this point in the article, making this statement confusing:
-%
-% because unlike in a centralized system there are many ways to be both online or off
+For ephemeral updates PushPin uses an additional messaging channel, adjacent to the CRDT, which ties arbitrary messages to a device and user context. The current implementation is rudimentary: ephemeral data is not associated with a particular CRDT state and is distributed only over live connections. Thus, it will behave as expected in complex network topologies or at large scale. Nevertheless, enables sharing important contextual awareness to the user experience of PushPin. In distributed applications it is particularly important to communicate the feeling of presence when other users are online or collaborating.
 
 \subsection{Supporting Multiple Documents}
 
 Sections~\ref{sec:documents} and~\ref{sec:urls} explained how PushPin breaks down all of its data into fine-grained documents.
 This decomposition of state is also beneficial for user interface development, because rendering can be done at the document level.
 
-For example, we can have a function that renders a text card, and that renderer can be invoked wherever a text card appears.
-This makes the user interface components more easily reusable and composable.
+Monolithic FRP can become difficult to reason about, as all messages and states are unified into a single transition function. The PushPin project associates independent FRP functions with individually replicable CRDTs as its fundamental primitive. These can be nested arbitrarily to produce complex views.
+
+For example, the board document \emph{render} function can include a mixture of text or image documents beneath it. Likewise, the same FRP code could render the text content at the root of the application to show the content full-screen. This makes the user interface components more easily reusable and composable.
 It is also easy to extend the application with new renderers, allowing users to have boards containing a mixture of predefined card types and custom card types they have defined themselves.
 
-Moreover, we can have multiple renderers that are able to render the same document in different ways.
-For example, in the user interface shown in Figure~\ref{fig:pushpin}, the board is actually being rendered twice: firstly as a 2D space representation containing the cards, and secondly the toolbar displaying the title of the board and its authors.
+Moreover, we can provide multiple renderers that are able to render the same document in different ways.
+For example, in the user interface shown in Figure~\ref{fig:pushpin}, the board is actually being rendered twice: firstly as a spatial representation containing the cards, and secondly within the toolbar as the title of the board and its authors. Some \emph{render} functions can even render a wide variety of documents, such as in the case of a title editor.
 
 \subsection{High-Performance User Interfaces}
 
@@ -358,7 +337,6 @@ This allows the application to minimise the time between user input (such as pre
 Automerge transparently handles the fact that local user input in the frontend can happen concurrently with the backend processing remote operations.
 We have not seen any other CRDT implementation that provides this feature.
 
-
 \section{Peer-to-peer Networking for Collaboration}\label{sec:networking}
 
 Every networked application relies on three core facilities provided by the networking stack: discovering the network address to connect to, establishing a connection, and securing the confidentiality and integrity of the data transfer.
@@ -366,9 +344,9 @@ Every networked application relies on three core facilities provided by the netw
 In a traditional web application, discovery is provided by DNS, connection by TCP, and security by SSL/TLS.
 However, these technologies are designed for centralised infrastructure, and they are not a good fit with our goal of being resilient to infrastructure failures:
 \begin{itemize}
-    \item DNS records disappear if the domain name owner stops paying the required registration fees, or stops running the authoritative nameserver.
+    \item DNS records are only available with internet access, and expire if the domain name owner stops paying the required registration fees
     \item TCP requires a server with a publicly routeable IP address; it cannot connect directly to most end-user devices as they are behind NAT (see Section~\ref{sec:nat-traversal}).
-    \item SSL/TLS certificates are tied to domain names, which incur registration fees.
+    \item SSL/TLS certificates are tied to DNS records, which mean only servers associated with that certificate can be trusted to provide data
 \end{itemize}
 
 The peer-to-peer technologies we explored in PushPin attempt to overcome the need for centralised infrastructure.
@@ -386,14 +364,13 @@ However, it is designed for static files, and is not suitable for data that is c
 \item[IPFS] aims to provide decentralised storage through a networking stack called \emph{libp2p}.
 Like BitTorrent, it is mostly focused on replicating static files; it provides limited support for changing data through its IPNS and PubSub modules, but these features are immature at the time of writing.
 \item[Dat] \cite{HowDatWorks,Ogden:2018ur} is a peer-to-peer data sharing platform.
-For peer discovery it uses a centralised DNS service hosted by a nonprofit foundation (a DHT is under development), and it uses BitTorrent's uTP protocol to establish connections.
+For peer discovery it uses a combination of mDNS for local peer discovery, and a DHT with seed nodes provided by a nonprofit foundation, and it uses BitTorrent's uTP protocol to establish connections.
 \end{description}
 
 For PushPin we decided to build upon the \emph{hypercore} protocol and implementation from the Dat project, since its focus on replicating mutable data makes it the best fit for our needs.
 Our integration of Hypercore with Automerge is called \emph{Hypermerge}~\cite{Hypermerge}.
 
-A hypercore is an append-only log that is authenticated with a public key; only the owner of the corresponding private key can modify the log, but many peers can store replicas of the log.
-We map each Automerge document to a set of hypercores, with one hypercore per device that has edited the document.
+A hypercore is an append-only log that is authenticated with a public key; only the owner of the corresponding private key can modify the log, but many peers can store and replicate the log. We map each Automerge document to a set of hypercores, with one hypercore per device that has edited the document.
 
 \subsection{Peer Discovery}\label{sec:peer-discovery}
 
@@ -405,9 +382,7 @@ When peers are on the same LAN (wired or wireless network), they attempt to disc
 If successful, the peers can connect directly via TCP and begin exchanging data.
 This mode of discovery is appealing since it depends only on the local network: communication between peers does not flow via the Internet, and it does not depend on any centralised infrastructure.
 
-When peers are not on the same LAN, the Dat protocol uses a centralised DNS server for peer discovery.
-This approach is not fully peer-to-peer, but at present this seems to be a necessary compromise to make.
-Since the DNS server only provides peer discovery, and does not handle any data transfer traffic, it is quite cheap to run.
+When peers are not on the same LAN, the Dat protocol queries a Distributed Hash Table~\cite{DHT} for peer discovery. A DHT operates by discovering new peers during its operation, but must have a few "bootstrapping" nodes hard-coded into the distribution. In PushPin's case, the bootstrapping nodes are operated by the Dat non-profit organisation. In practice, this is a form of weak centralisation, as if all of those nodes become unavailable, a software update would be necessary, but in principle there is no reason further work could not go into distributing those nodes more resiliently, i.e. across multiple organisations. 
 
 \subsection{NAT Traversal}\label{sec:nat-traversal}
 
@@ -417,24 +392,25 @@ This process is called Network Address Translation (NAT).
 
 A device behind a NAT router can make outbound connections, but it cannot receive inbound TCP connections from outside of the NAT.
 An exception: in home environments, where the user has control over their own router, the UPnP standard allows devices to reserve particular ports on the router's public IP address as the destination for inbound connections.
-However, mobile devices often use networks with NAT on which UPnP is not available, such as a coffee shop WiFi, a corporate office network, or a cellular data network.
+However, mobile devices often use networks with NAT on which UPnP is not available, such as a coffee shop WiFi, a corporate office network.
 
 In these cases, the most viable solution is known as ``hole punching'' or NAT traversal \cite{RFC5389}.
 This process requires the temporary intervention of a third host to introduce the two peers, and both peers sending UDP packets to each other, allowing a connection to be established.
-NAT traversal is performed by BitTorrent's uTP\cite{BEP29} protocol, and by the STUN protocol in WebRTC \cite{RFC5389}.
+NAT traversal is performed by BitTorrent's uTP protocol~\cite{BEP29}, and by the STUN protocol in WebRTC \cite{RFC5389}.
 
 However, there are situations in which neither the LAN discovery approach nor NAT traversal works.
 For example, some coffee-shop WiFi and some corporate networks are set up in a ``guest network'' mode, which prevents all local connections between devices on the network (intended as a security measure to prevent inadvertent sharing of data with other users on a public network).
 Without local traffic, we attempt to fall back on NAT traversal; however, this approach also fails, since many routers in their default configuration refuse to create NAT traversing routes that originate and terminate within the same network.
 
 In this case, establishing a direct connection between the peers seems to be impossible, and the only remaining option is to use a server with a public IP address to proxy the communication between the peers, e.g.\ using the TURN protocol~\cite{RFC5766}.
-In the case of PushPin, users can either run their own publicly addressable network hosts or take advantage of a TURN server provided by the community.
+
+In the case of PushPin, users in this position can take advantage of indirect replication through another mutually routable client. In fact, this is one of the key benefits of running a storage peer described in the next section. Note that while it is not implemented in PushPin today, in principal, any clients could provide relay services to other peers. 
 
 \subsection{Storage Peers}
 
 A limitation of any peer-to-peer system is that two peers can only communicate while they are both online.
 However, mobile devices are often offline, potentially making it difficult to find an opportunity to synchronise.
-For example, if your colleague has shared the URL of a PushPin board with you, it would be annoying if you could not access that board because the only copy of the board resides on your colleague's laptop, and that laptop's lid is currently closed.
+For example, if your colleague has shared the URL of a PushPin board with you, it would be annoying if you could not access that board because the only copy of the board resides on your colleague's laptop, and that laptop's lid is currently closed, or the application is currently closed.
 
 We can overcome this limitation by introducing \emph{storage peers}, which replicate all the data belonging to a particular user or set of users.
 A storage peer runs the same replication code as PushPin, recursively following any Hypermerge URLs, but as a simple Unix daemon without any visual user interface.
@@ -443,19 +419,16 @@ Storage peers also provide a form of backup.
 
 Unlike a traditional server, a storage peer can be reached through NAT traversal, so it does not need a public IP address: for example, it could be a device on the user's home internet connection.
 Since it only stores the data for a small number of users, it does not need to be a powerful machine.
-We have experimented with using a Raspberry Pi as storage peer, writing data to an SD card.
+We have experimented with using a Raspberry Pi as storage peer, writing data to an SD card, and also running storage peers on virtual server instances in public cloud providers.
 
 An interesting detail of the PushPin storage peer is that its user interface is not a web interface, nor a command line interface, but an Automerge document.
 When it starts up, the storage peer prints a URL that users can load from PushPin on another computer.
-Users then interact with their storage peer by making edits to this adminstration document within PushPin.
+Users then interact with their storage peer by making edits to this administration document within PushPin.
 The storage peer daemon monitors that document for changes and takes actions based on what it finds.
 
 \subsection{Data Confidentiality and Integrity}
 
-Some peer-to-peer systems, such as BitTorrent and IPFS, use a content-addressable storage approach to data integrity: every file is identified by the hash of its contents, and the recipient can check the integrity of the file by comparing its actual hash to the expected hash.
-(In fact, BitTorrent uses Merkle trees \cite{Merkle:1987} to allow efficient incremental validation of data during its download.)
-However, this approach is not suitable for collaboration software, where the the hash would frequently change as data is modified.
-Instead, Dat relies on digital signatures to ensure that nobody can make undetected alterations to the data without knowing the private key.
+Some peer-to-peer systems, such as BitTorrent and IPFS, use a content-addressable storage approach to data integrity: every file is identified by the hash of its contents, and the recipient can check the integrity of the file by comparing its actual hash to the expected hash. However, this approach is not suitable for collaboration software, where the the hash would frequently change as data is modified. Instead, Dat relies on digital signatures to ensure that nobody can make undetected alterations to the data without knowing the private key.
 
 The Dat protocol encrypts the communication between peers, using the URL of the document as a shared secret to establish the encryption key~\cite{HowDatWorks}.
 Thus, the URL acts as a bearer token (or capability) that grants read access to the document to anyone who knows it.
@@ -467,8 +440,6 @@ We are interested in stronger access control and end-to-end encryption protocols
 The peer discovery protocol uses hashes of URLs, not the URLs themselves, so that anyone observing the peer discovery traffic (such as the DNS server, or other devices on the local network when using mDNS) does not gain the ability to read the document.
 
 \subsection{Scalability of Peer Discovery}
-
-% (It should be noted that in practice today, the BitTorrent DHT has proven itself operationally resilient but other implementations such as IPFS have struggled to remain useful during flooding attacks.)
 
 On a local network, a Dat peer broadcasts all the hashes of URLs for data it holds, and all the hashes it requests.
 This approach is suitable when the number of URLs is small, but it breaks down as collections expand.
@@ -488,8 +459,7 @@ This is an area for future work.
 \subsection{Metadata Privacy}
 
 A downside of peer-to-peer protocols is that the peer discovery mechanisms leak information about users to other nodes on the network.
-Although the content of documents is only available to peers who know their URLs, the discovery keys (hashes of URLs) are widely broadcast, allowing a user's device to be identified by the pattern of discovery keys it shares.
-With this information, an attacker can monitor a user's IP address over time, and thus track their approximate physical location.
+Although the content of documents is only available to peers who know their URLs, the discovery keys (hashes of URLs) are widely broadcast, allowing a user's device to be identified by the pattern of discovery keys it shares. With this information, an attacker can monitor a user's IP address (or addresses) over time, and thus track their approximate physical location.
 
 A number of defences could reduce this tracking potential (e.g.\ automatic rotation of discovery keys, or some form of interactive proof exchange through a third party prior to exposing IP addresses), but this remains an area of active concern and research.
 
@@ -497,13 +467,13 @@ A number of defences could reduce this tracking potential (e.g.\ automatic rotat
 
 Let us begin by reiterating our objectives. We define success as delivering software which is fast, reliable, and useful. By that we mean specifically that the software should:
 \begin{itemize}
-    \item respond on the next frame to all input
-    \item allow local progress at all times
-    \item allow collaboration in all network conditions
-    \item should not rely on any singleton or centralised services
+    \item respond quickly to local user input (ideally, <15ms)
+    \item permit local writes at all times
+    \item allow collaboration over all network connections (with or without internet)
+    \item not rely on any centralised services
 \end{itemize}
 
-We believe that distributing data stored in the Automerge CRDT over a peer-to-peer system based on Dat, interacting with the data through a React FRP rendering engine and delivering it to clients as an Electron application meets these goals.
+We believe that replicating data stored in the Automerge CRDT over a peer-to-peer system based on Dat, interacting with the data through a React FRP rendering engine and delivering it to clients as an Electron application meets these goals.
 
 \subsection{CRDT / Application Model}
 
@@ -530,6 +500,7 @@ Peer-to-peer networking has three stages: content discovery, connection, and syn
 
 \begin{acks}
 Thank you to Roshan Choxi, Ignatius Gilfedder, Mark McGranaghan, Jeff Peterson, and Matt Tognetti, who contributed to the development of PushPin.
+Thank you to the Dat Foundation, particularly Mathias Buus, for their development of dat, hypercore, and hyperswarm.
 The project was produced under the auspices of the Ink \& Switch research lab (\url{https://www.inkandswitch.com/}).
 Martin Kleppmann is supported by a Leverhulme Trust Early Career Fellowship and by the Isaac Newton Trust.
 \end{acks}
