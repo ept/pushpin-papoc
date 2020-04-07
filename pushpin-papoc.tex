@@ -199,7 +199,7 @@ Unfortunately, web applications running in a traditional browser have constraint
 \begin{description}
 
 \item[Storage.]
-By default, browsers do not reliably store data or software. The Progressive Web Application standard and APIs like localStorage or IndexedDB provide some functionality to store local copies of code and data, but these systems are slow, and worse, often silently lose user data. These APIs are designed with the assumption that local user data is merely a cache, not authoritative, and such data is prone to being expired without warning or notification~\cite{LocalStorageCleared}.
+By default, browsers do not reliably store data or software. The Progressive Web Application standard and APIs like localStorage or IndexedDB provide some functionality to store local copies of code and data, but these systems are slow, and worse, often silently lose user data. These APIs are designed with the assumption that local user data is merely a cache, not authoritative, and such data is prone to being expired without warning or notification~\cite{LocalStorageCleared,Wilander:2020}.
 As a result, users have no way of predicting whether their data or the application will be available offline.
 
 Sometimes, manual steps are required: for example, Google Docs requires installing a special browser extension to enable offline support, and it only makes documents available offline when they are specifically selected by the user. Anecdotally, it appears to be common for users to think they had enabled offline usage, only to realise later that their data is unavailable.
@@ -277,7 +277,7 @@ We solved this problem using the Functional Reactive Programming (FRP) approach~
 FRP works by defining a deterministic \emph{render} function that takes the current state of an application and returns a description of a user interface that displays this state.
 Whenever the user performs an action, rather than updating the user interface directly, the \emph{state} is updated to reflect that action.
 The updated state is then passed to the render function, which computes the updated user interface.
-In practice, performance is improved by detecting which parts of the state are unchanged, and rendering and updating only those parts that have changed.
+Re-computing the full user interface on every change would be expensive, so in practice, performance is improved by detecting which elements of the view rely on changed state, and updating only those parts that are necessary.
 However, the conceptual simplicity remains: the render function cleanly translates between application state and user interface state.
 
 \subsection{Document FRP (DFRP)}
