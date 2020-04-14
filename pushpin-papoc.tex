@@ -80,16 +80,16 @@ We identify approaches that work well in our experience, such as the functional 
 
 \section{Introduction}
 
-In the past, software used to run on one computer and store its data on the local disk.
-Now, increasingly, we expect our software and data to be available on multiple devices, with synchronisation across devices belonging to the same user (e.g.\ laptop, smartphone, tablet), and also allowing real-time collaboration between multiple users.
+In the past, software used to run on one computer.
+Today we expect our software and data to be available on multiple devices, with synchronisation across devices belonging to the same user (e.g.\ laptop, smartphone, tablet), and also allowing real-time collaboration between multiple users.
 
-Today, such multi-user, multi-device software typically relies on cloud services that store the authoritative copy of the users' data, and which can be accessed through thin clients such as web browsers and mobile apps.
+At present, such multi-user, multi-device software typically relies on cloud services that store the authoritative copy of the users' data, and which can be accessed through thin clients such as web browsers and mobile apps.
 However, reliance on the cloud comes with problems: services require ongoing maintenance by expensive 24/7 operations teams, and they cease to exist when the organisation backing them terminates their funding.
 If a cloud service shuts down, users lose access to all data stored in that service, unless some migration path to an alternative service is provided.
 Moreover, cloud-centric software often does not work well offline, and can be slow as the client waits for round-trips to the server in order to load or store data there.
 
 Peer-to-peer (P2P) application software promises to overcome these problems.
-In principle, a P2P system should be able to function indefinitely, without depending on someone paying the server bills to keep a cloud service running.
+In principle, a P2P system should be able to function indefinitely, without depending on someone paying to keep a cloud service running.
 Storing an authoritative copy of data on the users' devices enables offline work and stronger data ownership~\cite{LocalFirst}, and synchronising updates through a P2P network should allow the same kind of real-time collaboration that we know from cloud software.
 
 While various research prototypes of P2P collaboration software have been developed~\cite{Nedelec:2016eo,vanderLinde:2017fu,Nicolaescu:2016ei}, we are yet to see any mainstream applications using this approach.
